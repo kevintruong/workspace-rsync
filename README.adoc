@@ -1,6 +1,6 @@
 ---
-title: "Hugo Asciidoc the Beset Ever Static Blog Platform"
-date: 2020-04-18T04:11:34Z
+title: "Workspace Rsync Auto Sync Up Your Local With Remote"
+dte: 2020-04-18T04:39:36Z
 draft: true
 ---
 
@@ -12,14 +12,87 @@ draft: true
 :source-highlighter: coderay
 :sectnumlevels: 5
 
+== Workspace Rsync Auto Sync Up Your Local With Remote
 
-== Hugo Asciidoc the Beset Ever Static Blog Platform
+=== What is Workspace Rsync ?
+Features:
 
-
-=== What is Hugo Asciidoc the Beset Ever Static Blog Platform?
+* Automatically sync up my local working space (directories) to remote working space
+** Configure your local working directories
+** Configure your remote working directories
+** configure ssh account with private key to use rsync/scp for download/update files
+** Inotify/monitoring changing happend in your local working dir and update to remote working dir
+* Support to sync up the whole working dir from remote to local and otherwise
+* Support configure file for auto-reload the previous configure
+* Saving the configure file to $HOME/.ws-rsync/.config_<name_of_monitoring_workspace>, Auto apply the configuration from
+there when user run the utility on configured workspace
+* If the local has not the workspace matching with remote side, then ask user to allow for downloading the remote side. And otherwise.
+if remote has not the Workspace which existed on local, the ask user to allow for uploading the local version to remote. But I
+will follow the simple methology here that Remote Side always have the latest version, The local will always clone workspace from remote side.
 
 
 === Overview
+GitHub Repo: `https://github.com/kevintruong/workspace-rsync`
+
+* BASH
+* SSH/SCP
+* RSYN
+* FIND
+
+=== CLI Define
+
+ws-rsync.sh init : User will run the initial steps for the current workspace dir"
+run the command bellow to update your configure which already done in initial step
+
+* input: `ssh_acc`
+* input: `ssh_key` private key
+* input: `ssh_pass` password
+* input: `local_dir` user want to monitor
+* input: `remote_dir` for mapping local workspace to remote workspace
+* input: diff_time (optional): polling time period to check the changed in `local_dir`
+
+ws-rsync.sh config --ssh kevin@exampleserver --ssh-key $HOME/.ssh/examplekey ...
+After inital/configue then can use the script to run some action
+
+by default, the script will run the default action monitoring and sync the workspace
+with daemon options, then script will run in background for example
+
+ws-rsync.sh run start --daemon  : workspace-rsync will monitor your configured workspace
+
+ws-rsync.sh run stop : workspace-rsync will monitor your configured workspace
+
+when we think that remote side is the latest version, then we need to sync up with the remote site. In this case, that we will
+download the newer files from the remote workspace
+
+ws-rsync.sh run remote_local_sync : run a sync up from local to remote: rsync download newer from remote to local/ scp download-replace everything from remote to local
+when we think that local side is latest version, then we need to update the newer files to remote workspace
+
+ws-rsync.sh run local_remote_sync : run a sync up from local to remote: rync  upload the newer from local to remote....
+
+==== Configure file format and storage
+By default, ws-rsync will store the configure file to $HOME/.ws-rsync
+The configure file have name format by: `.config_<hash_md5_of_abs_path_of_local_ws_dir`
+
+The reason I do that because we will have multiple workspace , each workspace for each project.
+the I use the ABS PATH of local Workspace and using MD5 of the ABS PATH as Identifier for configure file name
+then in the same local system, the configuration file will be unique
+
+==== Flow working diagram
+
+[.text-center]
+.Flow Working of ws-rsync
+[plantuml,flow_working_ws_rsync,svg,align="center"]
+----
+User -> "ws-rsync" : run --daemon
+"ws-rsync" -> System: is_curDir_initialized()
+"System" -> "ws-rsync": Fail
+"ws-rsync" -> User: ws-rsync init, please initial first
+User -> "ws-rsync": input configure
+"ws-rsync" -> "ws-rsync": verify config
+"ws-rsync" -> "ws-rsync": run start
+"ws-rsync" -> User: Success to run
+----
+
 
 === How it works
 
