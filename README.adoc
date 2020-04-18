@@ -1,0 +1,26 @@
+---
+title: "Hugo Asciidoc the Beset Ever Static Blog Platform"
+date: 2020-04-18T04:11:34Z
+draft: true
+---
+
+:projectdir: ../../
+:imagesdir: ${projectdir}/assets/
+:toclevels: 4
+:toc:
+:sectnums:
+:source-highlighter: coderay
+:sectnumlevels: 5
+
+
+== Hugo Asciidoc the Beset Ever Static Blog Platform
+
+
+=== What is Hugo Asciidoc the Beset Ever Static Blog Platform?
+
+
+=== Overview
+
+=== How it works
+
+=== Conclusion
