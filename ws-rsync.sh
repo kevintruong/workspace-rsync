@@ -38,11 +38,12 @@ function parse_conf_args
   while [[ "$1" != "" ]]; do
       case "$1" in
           --ssh )                               ssh_acc="$2";   shift;;
-          --ssh-pass )                           ssh_pass="$2";   shift;;
+          --ssh-port)                           ssh_port="$2"; shift;;
+          --ssh-pass )                          ssh_pass="$2";   shift;;
           --ssh-key )                           ssh_key="$2";   shift;;
-          --local )                          local_dir="$2";   shift;;
-          --remote )                         remote_dir="$2";   shift;;
-          --diff_time )                      diff_time="$2"; shift;;
+          --local )                             local_dir="$2";   shift;;
+          --remote )                            remote_dir="$2";   shift;;
+          --diff_time )                         diff_time="$2"; shift;;
           -h | --help )                         usage;          exit;; # quit and show usage
           * )                           args+=("$1")             # if no match, add it to the positional args
       esac
@@ -55,14 +56,45 @@ watch_dir_inotify(){
     return
 }
 
+function rsync_files_to_remote(){
+    echo "rsync_files_to_remote"
+    changed_file=$1
+    local_realpath=$(realpath --relative-to=${local_dir} ${changed_file})
+    SSH_OPTS="ssh -T -o Compression=no -x"
+    RSYNC_CMD="rsync -aHAXxv --numeric-ids --delete --progress"
+    if [[ ! -z ${ssh_port} ]]; then
+       SSH_OPTS="$SSH_OPTS -p ${ssh_port}"
+    fi
+    if [[ -z ${ssh_key} ]];then
+        SSHPASS_CMD="sshpass -p$ssh_pass"
+        RSYNC_TO_REMOTE_CMD="${SSHPASS_CMD} ${RSYNC_CMD} -e \"$SSH_OPTS\" ${changed_file} ${ssh_acc}:\"$remote_dir/$local_realpath\""
+    else
+        RSYNC_CMD="rsync -aHAXxv --numeric-ids --delete --progress -e \""
+        RSYNC_TO_REMOTE_CMD="${RSYNC_CMD}\"$SSH_OPTS\" ${changed_file} ${ssh_acc}:$remote_dir/$local_realpath"
+    fi
+    rsync_cmd=$(printf "%q " ${RSYNC_TO_REMOTE_CMD};echo)
+    printf "${rsync_cmd}" | bash
+    return
+}
+
+
 watch_dir() {
-    echo watching folder ${local_dir} every ${diff_time} secs.
+    ws_cfg_file=$(get_ws_config_file)
+    . ${ws_cfg_file}
+
+    if [[ -z "${diff_time}" ]];then
+        diff_time=3
+    fi
+    abs_local_dir=$(echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")")
+    echo watching folder ${abs_local_dir} every ${diff_time} secs.
+
     while [[ true ]]
     do
-        files=`find $1 -type f -newermt "$diff_time seconds ago"`
+        files=`find ${abs_local_dir} -type f -newermt "$diff_time seconds ago"`
         if [[ ${files} != "" ]] ; then
             echo "${files} changed"
             echo "run update file to remote side"
+            rsync_files_to_remote ${files}
         fi
         sleep ${diff_time}
     done
@@ -77,8 +109,11 @@ function get_ws_config_file() {
 function get_ws_config(){
     ws_cfg_file=$(get_ws_config_file)
     echo "Configure file is: $ws_cfg_file"
+    if [[ ! -f "$ws_cfg_file" ]]; then
+        echo 0
+    fi
     . "${ws_cfg_file}"
-    return
+    return 1
 }
 
 function write_ws_config(){
@@ -93,6 +128,10 @@ function write_ws_config(){
 
     if [[ ! -z ${ssh_key} ]]; then
         echo "${!ssh_key@}=$ssh_key" >> ${ws_cfg_file}
+    fi
+
+    if [[ ! -z ${ssh_port} ]]; then
+        echo "${!ssh_port@}=$ssh_port" >> ${ws_cfg_file}
     fi
 
     if [[ ! -z ${ssh_pass} ]]; then
@@ -111,18 +150,61 @@ function write_ws_config(){
         echo "${!remote_dir@}=$remote_dir" >> ${ws_cfg_file}
     fi
 
+    if [[ -z ${diff_time} ]];then
+        diff_time=${DEFAULT_DIFF_TIME}
+    fi
+
     if [[ ! -z ${diff_time} ]]; then
         echo "${!diff_time@}=$diff_time" >> ${ws_cfg_file}
     fi
 
     # if diff_time is NULL then add default value is 3 secs
-    if [[ -z ${diff_time} ]];then
-        diff_time=${DEFAULT_DIFF_TIME}
-    fi
+
     return;
 }
 
+function validate_ssh_connection(){
+    ws_cfg_file=$(get_ws_config_file)
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+
+    if [[ -z ${ssh_key} ]];then
+        if [[ ! -z ${ssh_pass} ]];then
+            echo "sshpass -p${ssh_pass} ssh -q ${ssh_acc} exit"
+            retVal=$(sshpass -p${ssh_pass} ssh -p ${ssh_port} ${ssh_acc} exit);
+            if [[ ${retVal} == 255 ]];then
+                echo "ssh connection is not active"
+                read -r "Press any key to continue or Ctrl-C to exit:"
+            fi
+        fi
+    else
+        if [[ ! -z ${ssh_pass} ]];then
+            retVal=$(ssh -q -i ${ssh_key} ${ssh_acc} exit);
+            if [[ ${retVal} == 255 ]];then
+                echo "ssh connection is not active"
+                read -r "Press any key to continue or Ctrl-C to exit:"
+            fi
+        fi
+    fi
+}
+
 function validate_ws_config(){
+    echo "please wait for validate configure"
+    echo "validating local dir $local_dir"
+    ws_cfg_file=$(get_ws_config_file)
+    . ${ws_cfg_file}
+    temp=""
+    if [[ ! -d ${local_dir} ]]; then
+        echo "Warmning look like $local_dir is not existed"
+        read -r 'Press any key to continue or Ctrl-C to exit:' temp
+        echo "create $local_dir"
+        mkdir -p ${local_dir}
+    fi
+    echo "Validating ssh connection"
+    validate_ssh_connection
     return
 }
 
@@ -142,9 +224,7 @@ function input_ssh_authenticate(){
     if [[ -z "${auth_private_key}" ]]; then
         auth_private_key="yes"
     fi
-    echo ${auth_private_key}
     auth_private_key=$(validate_bool_input ${auth_private_key})
-    echo ${auth_private_key}
     if [[ ${auth_private_key} == -1 ]]; then
         echo "Error on options using private key or not"
         auth_private_key=1
@@ -152,15 +232,19 @@ function input_ssh_authenticate(){
     if [[ ${auth_private_key} == 1 ]]; then
          read -p 'Enter your ssh private key:' ssh_key
     else
-        read -sp 'Enter your ssh password:' ssh_pass
+        read -sp 'Enter your ssh password: \n' ssh_pass
+    fi
+    read -p 'Enter your ssh port (Enter for default: 22) :' ssh_port
+    if [[ -z ${ssh_port} || $((ssh_port)) != $ssh_port ]];then
+        ssh_port=22
     fi
 }
 
 function run_init(){
     echo "run_init"
+    local_dir=$(pwd)
     read -p "Enter your ssh account:" ssh_acc
     input_ssh_authenticate
-    read -p "Enter your local workspace:" local_dir
     read -p "Enter your remote workspace:" remote_dir
     write_ws_config
     return
@@ -188,15 +272,27 @@ function run_action_local_remote_sync(){
 
 function run_start(){
     echo "run_start"
-    get_ws_config
+    ws_cfg_file=$(get_ws_config_file)
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+    echo ${local_dir}
+    echo "$remote_dir"
+    echo "$ssh_port"
+    echo "$ssh_pass"
+    echo "$ssh_acc"
+
+    validate_ws_config
     # positional args
     args=()
     # named args
     while [[ "$1" != "" ]]; do
         case "$1" in
             -d | --daemon )                  daemon=true;  shift;;
-           -h | --help )                         usage;          exit;; # quit and show usage
-            * )                           args+=("$1")             # if no match, add it to the positional args
+           -h | --help )                     usage;          exit;; # quit and show usage
+            * )                              args+=("$1")             # if no match, add it to the positional args
         esac
         shift # move to next kv pair
     done

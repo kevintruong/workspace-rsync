@@ -93,7 +93,6 @@ User -> "ws-rsync": input configure
 "ws-rsync" -> User: Success to run
 ----
 
-
 === How it works
 
 === Conclusion
