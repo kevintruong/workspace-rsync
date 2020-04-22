@@ -30,69 +30,66 @@ there when user run the utility on configured workspace
 if remote has not the Workspace which existed on local, the ask user to allow for uploading the local version to remote. But I
 will follow the simple methology here that Remote Side always have the latest version, The local will always clone workspace from remote side.
 
+=== Getting start
 
-=== Overview
-GitHub Repo: `https://github.com/kevintruong/workspace-rsync`
+==== Install
 
-* BASH
-* SSH/SCP
-* RSYN
-* FIND
 
-=== CLI Define
-
-ws-rsync.sh init : User will run the initial steps for the current workspace dir"
-run the command bellow to update your configure which already done in initial step
-
-* input: `ssh_acc`
-* input: `ssh_key` private key
-* input: `ssh_pass` password
-* input: `local_dir` user want to monitor
-* input: `remote_dir` for mapping local workspace to remote workspace
-* input: diff_time (optional): polling time period to check the changed in `local_dir`
-
-ws-rsync.sh config --ssh kevin@exampleserver --ssh-key $HOME/.ssh/examplekey ...
-After inital/configue then can use the script to run some action
-
-by default, the script will run the default action monitoring and sync the workspace
-with daemon options, then script will run in background for example
-
-ws-rsync.sh run start --daemon  : workspace-rsync will monitor your configured workspace
-
-ws-rsync.sh run stop : workspace-rsync will monitor your configured workspace
-
-when we think that remote side is the latest version, then we need to sync up with the remote site. In this case, that we will
-download the newer files from the remote workspace
-
-ws-rsync.sh run remote_local_sync : run a sync up from local to remote: rsync download newer from remote to local/ scp download-replace everything from remote to local
-when we think that local side is latest version, then we need to update the newer files to remote workspace
-
-ws-rsync.sh run local_remote_sync : run a sync up from local to remote: rync  upload the newer from local to remote....
-
-==== Configure file format and storage
-By default, ws-rsync will store the configure file to $HOME/.ws-rsync
-The configure file have name format by: `.config_<hash_md5_of_abs_path_of_local_ws_dir`
-
-The reason I do that because we will have multiple workspace , each workspace for each project.
-the I use the ABS PATH of local Workspace and using MD5 of the ABS PATH as Identifier for configure file name
-then in the same local system, the configuration file will be unique
-
-==== Flow working diagram
-
-[.text-center]
-.Flow Working of ws-rsync
-[plantuml,flow_working_ws_rsync,svg,align="center"]
+[source,shell]
 ----
-User -> "ws-rsync" : run --daemon
-"ws-rsync" -> System: is_curDir_initialized()
-"System" -> "ws-rsync": Fail
-"ws-rsync" -> User: ws-rsync init, please initial first
-User -> "ws-rsync": input configure
-"ws-rsync" -> "ws-rsync": verify config
-"ws-rsync" -> "ws-rsync": run start
-"ws-rsync" -> User: Success to run
+#dependency to run ssh with password authentication
+sudo apt install sshpass
+
+sudo cp ws-rsync /usr/local/bin
+export PATH=$PATH:/usr/local/bin
 ----
 
-=== How it works
+==== Configure and run the utility
 
-=== Conclusion
+[source,shell]
+----
+# for use ssh key to authentication
+ws-rsync config \
+    --ssh-acc vu.truong@kencancode.xyz \
+    --ssh-port 16022 \
+    --ssh-key $HOME/.ssh/id_rsa \
+    --local $(pwd) \
+    --remote /tmp/ \
+    --diff_time 3
+
+# for use ssh password to authentication
+//ws-rsync config \
+//    --ssh-acc vu.truong@kencancode.xyz \
+//    --ssh-port 16022 \
+//    --ssh-pass kencancode \
+//    --local $(pwd) \
+//    --remote /tmp/ \
+//    --diff_time 3
+
+ws-rsync start
+----
+
+==== Sub-Commands
+
+* `ws-rsync run force_download <workspace_file_path>`
+Download file from remote workspace, support relative/absolute path
+Examples:
+[source,shell]
+----
+ws-rsync run force_download /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
+ws-rsync run force_download ./version.h
+----
+
+* `ws-rsync run force_upload <workspace_file_path>`
+Upload `workspace_file_path` to remote, support relative/absolute path
+[source,shell]
+----
+ws-rsync run force_upload /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
+ws-rsync run force_upload ./version.h
+----
+
+* `ws-rsync run remote_local_sync`
+Discard every changes on local and apply remote version for local workspace
+
+* `ws-rsync run local_remote_sync`
+Discard every changes on remote and apply local version for remote workspace

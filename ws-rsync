@@ -10,21 +10,18 @@ mkdir -p $HOME/.ws-rsync/
 
 function usage
 {
-    echo "basically, workspace-rsync will create .config_<name-of-workspace-dir> in your $HOME when you run the utility with out any confile\\
+    echo "basically, workspace-rsync will create .config_<name-of-workspace-dir> in your $HOME when you run the utility with out any confile
           then the tool will check whether or not the configure in $HOME then it will auto apply the configure"
 
-    echo "usage: workspace-rsync -w your_dir_path -d diff_time : for monitoring your directory and re-update local hugo web"
-    echo "usage: hugo_ascii_cmder -r 'hugo command here' : for monitoring your directory and re-update local hugo web"
-
-    echo "usage: workspace-rsync -f $(pwd)/.myconfig_for_the_workspace"
-    echo "usage: workspace-rsync --ssh keivn@my-sample-server --ssh-key $HOME/.ssh/sample_key --local $(pwd) --remote /mnt/my-project/"
+    echo "usage: ws-rsync config --ssh keivn@my-sample-server --ssh-key $HOME/.ssh/sample_key --local $(pwd) --remote /mnt/my-project/"
 
     echo "   ";
-    echo "  --ssh                   : Your ssh account kevin@kencancode ";
+    echo "  --ssh-acc               : Your ssh account kevin@kencancode ";
+    echo "  --ssh-pass              : use ssh account password for authenticate; required sshpass";
     echo "  --ssh-key               : your ssh private key absolute path <~/home/kevin/.ssh/id_rsa>";
-    echo "  --local                 : local work space dir ~/Project/KEVIN/TestABC ";
+    echo "  --ssh-port              : custom ssh port";
     echo "  --remote                : remote work space dir /mnt/KEVIN/TestABC";
-    echo "  --diff_time         : diff_time to check changed on local side";
+    echo "  --diff_time             : diff_time to check changed on local side";
     echo "  -h | --help             : Help";
 }
 
@@ -37,8 +34,8 @@ function parse_conf_args
   # named args
   while [[ "$1" != "" ]]; do
       case "$1" in
-          --ssh )                               ssh_acc="$2";   shift;;
-          --ssh-port)                           ssh_port="$2"; shift;;
+          --ssh-acc )                               ssh_acc="$2";   shift;;
+          --ssh-port )                           ssh_port="$2"; shift;;
           --ssh-pass )                          ssh_pass="$2";   shift;;
           --ssh-key )                           ssh_key="$2";   shift;;
           --local )                             local_dir="$2";   shift;;
@@ -56,27 +53,47 @@ watch_dir_inotify(){
     return
 }
 
+function rsync_execute(){
+    src=$1
+    des=$2
+    echo "rsync $src $des"
+
+    SSH_OPTS="ssh -T -o Compression=no -x"
+    RSYNC_CMD_PREFIX="rsync -aHAXxvR --numeric-ids --delete --progress "
+    # ssh_port is not existed or default then add the custom port here
+    if [[ ! -z ${ssh_port} ]]; then
+       SSH_OPTS="$SSH_OPTS -p ${ssh_port}"
+    fi
+    # if ssh_pass is used, then use ssh pass as authenticate method
+    if [[ ! -z ${ssh_key} ]];then
+        SSHPASS_CMD="sshpass -p$ssh_pass"
+        RSYNC_CMD="${SSHPASS_CMD} ${RSYNC_CMD_PREFIX} -e \"$SSH_OPTS\""
+    else #otherwise, use ssh private key or non authenticate
+        if [[ ! -z ${ssh_key} ]]; then
+            SSH_OPTS="${SSH_OPTS} -i $ssh_key"
+        fi
+        RSYNC_CMD="${RSYNC_CMD_PREFIX} -e \"$SSH_OPTS\""
+    fi
+    RSYNC_CMD="$RSYNC_CMD $src $des"
+
+    rsync_execute_cmd=$(printf "%q " ${RSYNC_CMD};echo)
+    printf "${rsync_execute_cmd}"
+    printf "${rsync_execute_cmd}" | bash
+}
+
 function rsync_files_to_remote(){
     echo "rsync_files_to_remote"
     changed_file=$1
     local_realpath=$(realpath --relative-to=${local_dir} ${changed_file})
-    SSH_OPTS="ssh -T -o Compression=no -x"
-    RSYNC_CMD="rsync -aHAXxv --numeric-ids --delete --progress"
-    if [[ ! -z ${ssh_port} ]]; then
-       SSH_OPTS="$SSH_OPTS -p ${ssh_port}"
-    fi
-    if [[ -z ${ssh_key} ]];then
-        SSHPASS_CMD="sshpass -p$ssh_pass"
-        RSYNC_TO_REMOTE_CMD="${SSHPASS_CMD} ${RSYNC_CMD} -e \"$SSH_OPTS\" ${changed_file} ${ssh_acc}:\"$remote_dir/$local_realpath\""
-    else
-        RSYNC_CMD="rsync -aHAXxv --numeric-ids --delete --progress -e \""
-        RSYNC_TO_REMOTE_CMD="${RSYNC_CMD}\"$SSH_OPTS\" ${changed_file} ${ssh_acc}:$remote_dir/$local_realpath"
-    fi
-    rsync_cmd=$(printf "%q " ${RSYNC_TO_REMOTE_CMD};echo)
-    printf "${rsync_cmd}" | bash
+
+    local_file_dirpath=$(dirname "$local_realpath")
+
+    src=${local_dir}/./${local_realpath}
+    des=${ssh_acc}:"${remote_dir}"
+    rsync_execute ${src} ${des}
+
     return
 }
-
 
 watch_dir() {
     ws_cfg_file=$(get_ws_config_file)
@@ -94,7 +111,7 @@ watch_dir() {
         if [[ ${files} != "" ]] ; then
             echo "${files} changed"
             echo "run update file to remote side"
-            rsync_files_to_remote ${files}
+            rsync_files_to_remote ${files} &
         fi
         sleep ${diff_time}
     done
@@ -142,10 +159,6 @@ function write_ws_config(){
         echo "${!local_dir@}=$local_dir" >> ${ws_cfg_file}
     fi
 
-    if [[ ! -z ${local_dir} ]]; then
-        echo "${!local_dir@}=$local_dir" >> ${ws_cfg_file}
-    fi
-
     if [[ ! -z ${remote_dir} ]]; then
         echo "${!remote_dir@}=$remote_dir" >> ${ws_cfg_file}
     fi
@@ -163,6 +176,14 @@ function write_ws_config(){
     return;
 }
 
+function validate_rsync_transportor() {
+#    test_file="/tmp/rsync_test"
+#    touch ${test_file}
+#    rsync_files_to_remote $test_file
+    return;
+}
+
+
 function validate_ssh_connection(){
     ws_cfg_file=$(get_ws_config_file)
     if [[ -z "$ws_cfg_file" ]];then
@@ -170,23 +191,23 @@ function validate_ssh_connection(){
         run_init
     fi
     . ${ws_cfg_file}
-
-    if [[ -z ${ssh_key} ]];then
-        if [[ ! -z ${ssh_pass} ]];then
-            echo "sshpass -p${ssh_pass} ssh -q ${ssh_acc} exit"
-            retVal=$(sshpass -p${ssh_pass} ssh -p ${ssh_port} ${ssh_acc} exit);
-            if [[ ${retVal} == 255 ]];then
-                echo "ssh connection is not active"
-                read -r "Press any key to continue or Ctrl-C to exit:"
-            fi
+    temp=""
+    if [[ ! -z ${ssh_pass} ]];then
+        retVal=$(sshpass -p${ssh_pass} ssh -p ${ssh_port} ${ssh_acc} exit);
+        if [[ ${retVal} == 255 ]];then
+            echo "ssh connection is not active"
+            read -r "Press any key to continue or Ctrl-C to exit:" temp
+        else
+            echo "ssh connection is active"
+            return
         fi
-    else
-        if [[ ! -z ${ssh_pass} ]];then
-            retVal=$(ssh -q -i ${ssh_key} ${ssh_acc} exit);
-            if [[ ${retVal} == 255 ]];then
-                echo "ssh connection is not active"
-                read -r "Press any key to continue or Ctrl-C to exit:"
-            fi
+    fi
+
+    if [[ ! -z ${ssh_key} ]];then
+        retVal=$(ssh -q -i ${ssh_key} ${ssh_acc} exit);
+        if [[ ${retVal} == 255 ]];then
+            echo "ssh connection is not active"
+            read -r "Press any key to continue or Ctrl-C to exit:" temp
         fi
     fi
 }
@@ -260,14 +281,78 @@ function run_configue(){
     return;
 }
 
-function run_action_remote_local_sync(){
+function run_remote_local_sync(){
+    ws_cfg_file=$(get_ws_config_file)
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+
     echo "run_action_remote_local_sync"
+    remote_dirname=${remote_dir##*/}
+    remote_parent_dir=$(dirname ${remote_dir})
+
+    src=${ssh_acc}:"$remote_parent_dir/${remote_dirname}/./"
+    des=${local_dir}/
+    echo "sync up all data in remote $src  to local $des"
+    rsync_execute ${src} ${des}
     return
 }
 
-function run_action_local_remote_sync(){
+function run_local_remote_sync(){
+    ws_cfg_file=$(get_ws_config_file)
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+
     echo "run_action_local_remote_sync"
-    return;
+    src=${local_dir}/./
+    des=${ssh_acc}:"${remote_dir}"
+    echo "sync up all data in local $src  to remote $des"
+    rsync_execute ${src} ${des}
+    return
+}
+
+function run_force_upload(){
+    ws_cfg_file=$(get_ws_config_file)
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+
+    validate_ws_config
+    upload_file=$1
+    local_realpath=$(realpath --relative-to=${local_dir} ${upload_file})
+    local_file_dirpath=$(dirname "$local_realpath")
+
+    src=${local_dir}/./${local_realpath}
+    des=${ssh_acc}:"${remote_dir}/"
+
+    rsync_execute ${src} ${des}
+}
+
+function run_force_download(){
+    ws_cfg_file=$(get_ws_config_file)
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+    validate_ws_config
+
+    upload_file=$1
+    echo "realpath --relative-to=${local_dir} ${upload_file}"
+    local_realpath=$(realpath --relative-to=${local_dir} ${upload_file})
+    local_file_dirpath=$(dirname "$local_realpath")
+
+    src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
+    des="${local_dir}/${local_file_dirpath}/"
+
+    rsync_execute ${src} ${des}
 }
 
 function run_start(){
@@ -278,19 +363,13 @@ function run_start(){
         run_init
     fi
     . ${ws_cfg_file}
-    echo ${local_dir}
-    echo "$remote_dir"
-    echo "$ssh_port"
-    echo "$ssh_pass"
-    echo "$ssh_acc"
-
     validate_ws_config
     # positional args
     args=()
     # named args
     while [[ "$1" != "" ]]; do
         case "$1" in
-            -d | --daemon )                  daemon=true;  shift;;
+           -d | --daemon )                   daemon=true;  shift;;
            -h | --help )                     usage;          exit;; # quit and show usage
             * )                              args+=("$1")             # if no match, add it to the positional args
         esac
@@ -333,18 +412,23 @@ function run
         run_configue $@
         exit 0
         ;;
+    "" | "start" )
+        shift
+        run_start $@
+        exit 0
+        ;;
     "" | "run")
-    shift
-    action=$1
-    shift
-    echo "run action: ${subcommand}_${action} $@"
-    ${subcommand}_${action} $@
-    if [[ $? = 127 ]]; then
-            echo "Error: '$subcommand' is not a known subcommand." >&2
-            echo "       Run '$ProgName --help' for a list of known subcommands." >&2
-            exit 1
-        fi
-    ;;
+        shift
+        action=$1
+        shift
+        echo "run action: ${subcommand}_${action} $@"
+        ${subcommand}_${action} $@
+        if [[ $? = 127 ]]; then
+                echo "Error: '$subcommand' is not a known subcommand." >&2
+                echo "     Run '$ProgName --help' for a list of known subcommands." >&2
+                exit 1
+            fi
+        ;;
     *)
         echo "Error: '$subcommand' is not a known subcommand." >&2
         echo "       Run '$ProgName --help' for a list of known subcommands." >&2
