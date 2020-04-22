@@ -14,8 +14,9 @@ draft: true
 
 == Workspace Rsync Auto Sync Up Your Local With Remote
 
-
 === What is Workspace Rsync ?
+
+
 Features:
 
 * Automatically sync up my local working space (directories) to remote working space
@@ -64,8 +65,6 @@ when we think that remote side is the latest version, then we need to sync up wi
 download the newer files from the remote workspace
 
 * `ws-rsync.sh run remote_local_sync`
-
-
 
 Run a sync up from local to remote: rsync download newer from remote to local/ scp download-replace everything from remote to local
 when we think that local side is latest version, then we need to update the newer files to remote workspace
