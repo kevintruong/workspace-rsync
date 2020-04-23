@@ -16,7 +16,6 @@ draft: true
 
 === What is Workspace Rsync ?
 
-
 Features:
 
 * Automatically sync up my local working space (directories) to remote working space
@@ -96,6 +95,7 @@ User -> "ws-rsync": input configure
 "ws-rsync" -> "ws-rsync": run start
 "ws-rsync" -> User: Success to run
 ----
+
 
 === How it works
 
