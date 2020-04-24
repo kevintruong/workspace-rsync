@@ -34,11 +34,16 @@ will follow the simple methology here that Remote Side always have the latest ve
 
 ==== Install
 
+ideally, The utility is not dependency on any other tools. But if your remote side is not support private key/public key pair for authentication
+then you should use ssh password for authentication. Then you need `sshpass`
 
+Another side is how the ws-rsync daemon know about there have a changed/create file. I used `find` with `diff_time` pooling mechanism to
+check the status of files in local side. But there will have window time `diff_time` to the next check
+If you want the process more realtime, then you need `inotify-tools`
 [source,shell]
 ----
 #dependency to run ssh with password authentication
-sudo apt install sshpass
+sudo apt install sshpass inotify-tools
 
 sudo cp ws-rsync /usr/local/bin
 export PATH=$PATH:/usr/local/bin
@@ -55,6 +60,7 @@ ws-rsync config \
     --ssh-key $HOME/.ssh/id_rsa \
     --local $(pwd) \
     --remote /tmp/ \
+    --sudo true \
     --diff_time 3
 
 # for use ssh password to authentication
