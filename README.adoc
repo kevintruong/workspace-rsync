@@ -29,6 +29,7 @@ there when user run the utility on configured workspace
 * If the local has not the workspace matching with remote side, then ask user to allow for downloading the remote side. And otherwise.
 if remote has not the Workspace which existed on local, the ask user to allow for uploading the local version to remote. But I
 will follow the simple methology here that Remote Side always have the latest version, The local will always clone workspace from remote side.
+* Support local rsync. In the case, don't need push any infomation in --ssh-acc/--ssh-pass/--ssh-key , the ws-rsync will becall in local
 
 === Getting start
 

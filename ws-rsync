@@ -63,30 +63,38 @@ function rsync_execute(){
     force_sync=$3
 
     SSH_OPTS="ssh -T -o Compression=no -x"
-    RSYNC_CMD_PREFIX="rsync -aHAXxR --numeric-ids --progress --exclude='.git' --exclude='*~'"
+    RSYNC_CMD="rsync -aHAXxR --numeric-ids --progress --exclude='.git' --exclude='*~'"
     # ssh_port is not existed or default then add the custom port here
-    if [[ ! -z ${ssh_port} ]]; then
-       SSH_OPTS="$SSH_OPTS -p ${ssh_port}"
-    fi
+
     if [[ -f ${local_dir}/.gitignore ]]; then
         if [[ -z "$force_sync" || ${force_sync} == false ]]; then
-            RSYNC_CMD_PREFIX="$RSYNC_CMD_PREFIX --exclude-from='${local_dir}/.gitignore'"
+            RSYNC_CMD="$RSYNC_CMD --exclude-from='${local_dir}/.gitignore'"
         fi
     fi
     if [[ ! -z ${sudo} ]];then
-        RSYNC_CMD_PREFIX="$RSYNC_CMD_PREFIX --rsync-path=\"sudo rsync\""
+        RSYNC_CMD="$RSYNC_CMD --rsync-path=\"sudo rsync\""
+    fi
+
+    # SSH OPTIONS
+    if [[ ! -z ${ssh_port} ]]; then
+       SSH_OPTS="$SSH_OPTS -p ${ssh_port}"
     fi
 
     # if ssh_pass is used, then use ssh pass as authenticate method
     if [[ ! -z ${ssh_pass} ]];then
         SSHPASS_CMD="sshpass -p$ssh_pass"
-        RSYNC_CMD="${SSHPASS_CMD} ${RSYNC_CMD_PREFIX} -e \"$SSH_OPTS\""
+        RSYNC_CMD="${SSHPASS_CMD} ${RSYNC_CMD} -e \"$SSH_OPTS\""
     else #otherwise, use ssh private key or non authenticate
         if [[ ! -z ${ssh_key} ]]; then
             SSH_OPTS="${SSH_OPTS} -i $ssh_key"
+            RSYNC_CMD="${RSYNC_CMD} -e \"$SSH_OPTS\""
+        else
+            # Work arround for ":" if non ssh
+            src=$(echo "$src" | tr ":" " ")
+            des=$(echo "$des" | tr ":" " ")
         fi
-        RSYNC_CMD="${RSYNC_CMD_PREFIX} -e \"$SSH_OPTS\""
     fi
+
     RSYNC_CMD="$RSYNC_CMD $src $des"
     rsync_execute_cmd=$(printf "%q " ${RSYNC_CMD};echo)
     printf "${rsync_execute_cmd}"
@@ -269,7 +277,7 @@ function input_ssh_authenticate(){
         read -sp 'Enter your ssh password: \n' ssh_pass
     fi
     read -p 'Enter your ssh port (Enter for default: 22) :' ssh_port
-    if [[ -z ${ssh_port} || $((ssh_port)) != $ssh_port ]];then
+    if [[ -z ${ssh_port} || $((ssh_port)) != ${ssh_port} ]];then
         ssh_port=22
     fi
 }
