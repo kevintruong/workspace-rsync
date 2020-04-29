@@ -26,6 +26,12 @@ function usage
     echo "  -h | --help             : Help";
 }
 
+function dump_config()
+{
+    ws_cfg_file=$(get_ws_config_file)
+    cat ${ws_cfg_file}
+}
+
 
 function parse_conf_args
 {
@@ -35,8 +41,8 @@ function parse_conf_args
   # named args
   while [[ "$1" != "" ]]; do
       case "$1" in
-          --ssh-acc )                               ssh_acc="$2";   shift;;
-          --ssh-port )                           ssh_port="$2"; shift;;
+          --ssh-acc )                           ssh_acc="$2";   shift;;
+          --ssh-port )                          ssh_port="$2"; shift;;
           --ssh-pass )                          ssh_pass="$2";   shift;;
           --ssh-key )                           ssh_key="$2";   shift;;
           --local )                             local_dir="$2";   shift;;
@@ -44,6 +50,7 @@ function parse_conf_args
           --diff_time )                         diff_time="$2"; shift;;
           --sudo )                              sudo="$2"; shift;;
           -h | --help )                         usage;          exit;; # quit and show usage
+          dump )                                dump_config; exit;;
           * )                           args+=("$1")             # if no match, add it to the positional args
       esac
       shift # move to next kv pair
@@ -52,7 +59,7 @@ function parse_conf_args
 }
 
 function watch_dir_inotify(){
-    inotifywait -mr --format '%w%f' -e close_write ${local_dir} | while read dir file ; do
+    inotifywait -mr --format '%w%f' -e close_write --exclude '/\.' --exclude '/\.git' ${local_dir} | while read dir file ; do
            rsync_files_to_remote ${dir}${file} &
     done
 }
@@ -63,7 +70,7 @@ function rsync_execute(){
     force_sync=$3
 
     SSH_OPTS="ssh -T -o Compression=no -x"
-    RSYNC_CMD="rsync -aHAXxR --numeric-ids --progress --exclude='.git' --exclude='*~'"
+    RSYNC_CMD="rsync -aHAXxR --numeric-ids --progress --exclude=.git/ --exclude=*~"
     # ssh_port is not existed or default then add the custom port here
 
     if [[ -f ${local_dir}/.gitignore ]]; then
@@ -346,8 +353,8 @@ function run_force_upload(){
     . ${ws_cfg_file}
 
     validate_ws_config
-    upload_file=$1
-    local_realpath=$(realpath --relative-to=${local_dir} ${upload_file})
+    download_entry=$1
+    local_realpath=$(realpath --relative-to=${local_dir} ${download_entry})
     local_file_dirpath=$(dirname "$local_realpath")
 
     src=${local_dir}/./${local_realpath}
@@ -366,13 +373,19 @@ function run_force_download(){
     . ${ws_cfg_file}
     validate_ws_config
 
-    upload_file=$1
-    echo "realpath --relative-to=${local_dir} ${upload_file}"
-    local_realpath=$(realpath --relative-to=${local_dir} ${upload_file})
-    local_file_dirpath=$(dirname "$local_realpath")
+    download_entry=$1
+
+    if [[ "${download_entry:0:1}" = "/" ]]; then
+        echo "Download entry is abs path - not support yet"
+        local_realpath=$(realpath --relative-to=${local_dir} ${download_entry})
+        echo ${local_realpath}
+        exit -1
+    else
+        local_realpath=${download_entry}
+    fi
 
     src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
-    des="${local_dir}/${local_file_dirpath}/"
+    des="${local_dir}/./"
 
     rsync_execute ${src} ${des} true
 }
