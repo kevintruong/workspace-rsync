@@ -58,9 +58,29 @@ function parse_conf_args
   set -- "${args[@]}"
 }
 
+function is_tracked_by_git(){
+    dir=$1
+    file=$2
+    pushd ${dir} > /dev/null 2>&1
+    inside_git_repo="$(git rev-parse --is-inside-work-tree ${dir} 2>/dev/null)"
+    if [[ "$inside_git_repo" ]]; then
+        git check-ignore "${dir}/${file}" >/dev/null 2>&1
+        echo $?
+    else
+        echo 0
+    fi
+    popd > /dev/null 2>&1
+}
+
 function watch_dir_inotify(){
-    inotifywait -mr --format '%w%f' -e close_write --exclude '/\.' --exclude '/\.git' ${local_dir} | while read dir file ; do
-           rsync_files_to_remote ${dir}${file} &
+    inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' ${local_dir} | while read event dir file ; do
+           ret=$(is_tracked_by_git ${dir} ${file})
+           if [[ ${ret} ]]; then
+               echo "update file $file by rsync"
+               rsync_files_to_remote ${dir}${file}  >/dev/null 2>&1
+           else
+               echo "ignored update $file"
+           fi
     done
 }
 
@@ -71,7 +91,6 @@ function rsync_execute(){
 
     SSH_OPTS="ssh -T -o Compression=no -x"
     RSYNC_CMD="rsync -aHAXxR --numeric-ids --progress --exclude=.git/ --exclude=*~"
-    # ssh_port is not existed or default then add the custom port here
 
     if [[ -f ${local_dir}/.gitignore ]]; then
         if [[ -z "$force_sync" || ${force_sync} == false ]]; then
@@ -116,8 +135,7 @@ function rsync_files_to_remote(){
 
     src=${local_dir}/./${local_realpath}
     des=${ssh_acc}:"${remote_dir}"
-    rsync_execute ${src} ${des}
-
+    rsync_execute ${src} ${des} &
     return
 }
 
@@ -374,12 +392,10 @@ function run_force_download(){
     validate_ws_config
 
     download_entry=$1
-
     if [[ "${download_entry:0:1}" = "/" ]]; then
         echo "Download entry is abs path - not support yet"
-        local_realpath=$(realpath --relative-to=${local_dir} ${download_entry})
+        local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
         echo ${local_realpath}
-        exit -1
     else
         local_realpath=${download_entry}
     fi
