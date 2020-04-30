@@ -58,9 +58,27 @@ function parse_conf_args
   set -- "${args[@]}"
 }
 
+function is_ignored_by_git(){
+    dir=$1
+    file=$2
+    inside_git_repo="$(git rev-parse --is-inside-work-tree ${dir} 2>/dev/null)"
+    if [[ "$inside_git_repo" ]]; then
+        is_ignored=!$(git check-ignore "${dir}/${file}" >/dev/null 2>&1)
+        echo ${is_ignored}
+    else
+        echo 0
+    fi
+}
+
 function watch_dir_inotify(){
     inotifywait -mr --format '%w%f' -e close_write --exclude '/\.' --exclude '/\.git' ${local_dir} | while read dir file ; do
-           rsync_files_to_remote ${dir}${file} &
+           echo "$dir/$file is changed, let update"
+           is_ignored=$(is_ignored_by_git ${dir} ${file})
+           if [[ ${is_ignored} == 0 ]]; then
+               rsync_files_to_remote ${dir}${file} &
+           else
+               echo "ignored update $file"
+           fi
     done
 }
 
@@ -374,12 +392,10 @@ function run_force_download(){
     validate_ws_config
 
     download_entry=$1
-
     if [[ "${download_entry:0:1}" = "/" ]]; then
         echo "Download entry is abs path - not support yet"
-        local_realpath=$(realpath --relative-to=${local_dir} ${download_entry})
+        local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
         echo ${local_realpath}
-        exit -1
     else
         local_realpath=${download_entry}
     fi
