@@ -1,5 +1,5 @@
 ---
-title: "Workspace Rsync Auto Sync Up Your Local With Remote"
+title: "WS-RSYNC - Design thought"
 dte: 2020-04-18T04:39:36Z
 draft: true
 ---
@@ -12,7 +12,7 @@ draft: true
 :source-highlighter: coderay
 :sectnumlevels: 5
 
-== Workspace Rsync Auto Sync Up Your Local With Remote
+== Workspace Rsync - Design Thought
 
 === What is Workspace Rsync ?
 Features:

@@ -12,6 +12,7 @@ draft: true
 :source-highlighter: coderay
 :sectnumlevels: 5
 
+//tag::readme[]
 == Workspace Rsync Auto Sync Up Your Local With Remote
 
 === What is Workspace Rsync ?
@@ -100,3 +101,4 @@ Discard every changes on local and apply remote version for local workspace
 
 * `ws-rsync run local_remote_sync`
 Discard every changes on remote and apply local version for remote workspace
+//end::readme[]
