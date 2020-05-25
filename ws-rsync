@@ -28,8 +28,10 @@ function usage
 
 function dump_config()
 {
-    ws_cfg_file=$(get_ws_config_file)
-    cat ${ws_cfg_file}
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ -f ${ws_cfg_file} ]];then
+        cat ${ws_cfg_file}
+    fi
 }
 
 
@@ -73,7 +75,8 @@ function is_tracked_by_git(){
 }
 
 function watch_dir_inotify(){
-    inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' ${local_dir} | while read event dir file ; do
+    watch_dir=$1
+    inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' ${watch_dir} | while read event dir file ; do
            ret=$(is_tracked_by_git ${dir} ${file})
            if [[ ${ret} ]]; then
                echo "update file $file by rsync"
@@ -140,7 +143,7 @@ function rsync_files_to_remote(){
 }
 
 function watch_dir() {
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     . ${ws_cfg_file}
 
     if [[ -z "${diff_time}" ]];then
@@ -159,14 +162,27 @@ function watch_dir() {
     done
 }
 
-function get_ws_config_file() {
-    ASB_DIR_PATH=${CUR_WORK_DIR}
-    MD5_CUR_DIR=$(echo -n ${ASB_DIR_PATH} | md5sum | awk '{print $1}')
-    echo "$HOME/.ws-rsync/.config_${MD5_CUR_DIR}"
+get_ws_config_file() {
+    echo "value of $1" >> /tmp/ws-rsync.log
+    ABS_DIR_PATH=$1
+    MD5_CUR_DIR=$(echo -n ${ABS_DIR_PATH} | md5sum | awk '{print $1}')
+    config_file="$HOME/.ws-rsync/config_${MD5_CUR_DIR}"
+
+    if [[ ${ABS_DIR_PATH} = "/" ]]; then
+        echo "Not found configure file recursively, exit -1" >&2
+        exit -1
+    fi
+    if [[ -f ${config_file} ]]; then
+        echo ${config_file}
+    else
+        ret=$(get_ws_config_file $(dirname ${ABS_DIR_PATH}))
+        echo ${ret}
+    fi
+    return
 }
 
 function get_ws_config(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     echo "Configure file is: $ws_cfg_file"
     if [[ ! -f "$ws_cfg_file" ]]; then
         echo 0
@@ -176,7 +192,7 @@ function get_ws_config(){
 }
 
 function write_ws_config(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$1
     echo "ws configure file: $ws_cfg_file"
     echo "clean up the workspace configure file"
     echo  > ${ws_cfg_file}
@@ -231,7 +247,7 @@ function validate_rsync_transportor() {
 
 
 function validate_ssh_connection(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
         run_init
@@ -261,7 +277,7 @@ function validate_ssh_connection(){
 function validate_ws_config(){
     echo "please wait for validate configure"
     echo "validating local dir $local_dir"
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     . ${ws_cfg_file}
     temp=""
     if [[ ! -d ${local_dir} ]]; then
@@ -306,29 +322,40 @@ function input_ssh_authenticate(){
         ssh_port=22
     fi
 }
+get_ws_config_file_path() {
+    ABS_DIR_PATH=${CUR_WORK_DIR}
+    MD5_CUR_DIR=$(echo -n ${ABS_DIR_PATH} | md5sum | awk '{print $1}')
+    ws_cfg_file="$HOME/.ws-rsync/config_${MD5_CUR_DIR}"
+    echo ${ws_cfg_file}
+}
 
 function run_init(){
     echo "run_init"
+    ws_cfg_file=$(get_ws_config_file_path)
     local_dir=$(pwd)
     read -p "Enter your ssh account:" ssh_acc
     input_ssh_authenticate
     read -p "Enter your remote workspace:" remote_dir
-    write_ws_config
+    write_ws_config ${get_ws_config_file}
     return
 }
 
 function run_configue(){
-    ws_cfg_file=$(get_ws_config_file)
-    if [[ -f "$ws_cfg_file" ]]; then
-        . ${ws_cfg_file}
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ ! -z "$ws_cfg_file" ]]; then
+       . ${ws_cfg_file}
+    else
+        ABS_DIR_PATH=${CUR_WORK_DIR}
+        MD5_CUR_DIR=$(echo -n ${ABS_DIR_PATH} | md5sum | awk '{print $1}')
+        ws_cfg_file="$HOME/.ws-rsync/config_${MD5_CUR_DIR}"
     fi
     parse_conf_args "$@"
-    write_ws_config
+    write_ws_config ${ws_cfg_file}
     return;
 }
 
 function run_remote_local_sync(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
         run_init
@@ -347,7 +374,7 @@ function run_remote_local_sync(){
 }
 
 function run_local_remote_sync(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
         run_init
@@ -363,7 +390,7 @@ function run_local_remote_sync(){
 }
 
 function run_force_upload(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
         run_init
@@ -382,7 +409,7 @@ function run_force_upload(){
 }
 
 function run_force_download(){
-    ws_cfg_file=$(get_ws_config_file)
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
         echo "please rerun ws-rsync init"
@@ -408,8 +435,8 @@ function run_force_download(){
 
 function run_start(){
     echo "run_start"
-    ws_cfg_file=$(get_ws_config_file)
-    if [[ -z "$ws_cfg_file" ]];then
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ ! -f "$ws_cfg_file" ]];then
         echo "error on get configure"
         run_init
     fi
@@ -435,7 +462,9 @@ function run_start(){
         watch_dir
         exit 0
     fi
-    watch_dir_inotify
+    relative_path=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
+    echo "$relative_path" >> /tmp/ws-rsync.log
+    watch_dir_inotify ${local_dir}/${relative_path}
     exit 0
 }
 
@@ -497,3 +526,4 @@ esac
 }
 
 run "$@";
+#get_ws_config_fil
