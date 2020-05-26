@@ -363,11 +363,14 @@ function run_remote_local_sync(){
     . ${ws_cfg_file}
 
     echo "run_action_remote_local_sync"
+
+    local_realpath=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
+
     remote_dirname=${remote_dir##*/}
     remote_parent_dir=$(dirname ${remote_dir})
 
-    src=${ssh_acc}:"$remote_parent_dir/${remote_dirname}/./"
-    des=${local_dir}/
+    src=${ssh_acc}:"$remote_parent_dir/${remote_dirname}/./$local_realpath"
+    des=${local_dir}
     echo "sync up all data in remote $src  to local $des"
     rsync_execute ${src} ${des}
     return
@@ -381,9 +384,12 @@ function run_local_remote_sync(){
     fi
     . ${ws_cfg_file}
 
+    local_realpath=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
+
     echo "run_action_local_remote_sync"
-    src=${local_dir}/./
-    des=${ssh_acc}:"${remote_dir}"
+
+    src=${local_dir}/./$local_realpath
+    des=${ssh_acc}:"${remote_dir}/./"
     echo "sync up all data in local $src  to remote $des"
     rsync_execute ${src} ${des}
     return
