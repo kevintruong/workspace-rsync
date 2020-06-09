@@ -405,7 +405,7 @@ function run_force_upload(){
 
     validate_ws_config
     download_entry=$1
-    abs_download_entry=$(realpath ${download_entry})
+    abs_download_entry=$(realpath -m ${download_entry})
     local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_download_entry})
 
     src=${local_dir}/./${local_realpath}
@@ -427,7 +427,7 @@ function run_force_download(){
     download_entry=$1
 
     echo "Download Entry Path $download_entry"
-    abs_download_entry=$(realpath ${download_entry})
+    abs_download_entry=$(realpath -m ${download_entry})
     local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_download_entry})
     echo "Relative entry path  $local_realpath -relative with $local_dir"
     echo ${local_realpath}
