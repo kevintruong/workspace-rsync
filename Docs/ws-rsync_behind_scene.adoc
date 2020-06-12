@@ -1,5 +1,5 @@
 ---
-title: "WS-RSYNC - Design thought"
+title: "WS-RSYNC internal"
 dte: 2020-04-18T04:39:36Z
 draft: true
 ---
@@ -12,9 +12,7 @@ draft: true
 :source-highlighter: coderay
 :sectnumlevels: 5
 
-== Workspace Rsync - Design Thought
-
-=== What is Workspace Rsync ?
+== What is Workspace Rsync ?
 Features:
 
 * Automatically sync up my local working space (directories) to remote working space
@@ -31,7 +29,7 @@ if remote has not the Workspace which existed on local, the ask user to allow fo
 will follow the simple methology here that Remote Side always have the latest version, The local will always clone workspace from remote side.
 
 
-=== Overview
+== Overview
 GitHub Repo: `https://github.com/kevintruong/workspace-rsync`
 
 * BASH
@@ -39,7 +37,7 @@ GitHub Repo: `https://github.com/kevintruong/workspace-rsync`
 * RSYN
 * FIND
 
-=== CLI Define
+== CLI Define
 
 ws-rsync.sh init : User will run the initial steps for the current workspace dir"
 run the command bellow to update your configure which already done in initial step
@@ -69,7 +67,7 @@ when we think that local side is latest version, then we need to update the newe
 
 ws-rsync.sh run local_remote_sync : run a sync up from local to remote: rync  upload the newer from local to remote....
 
-==== Configure file format and storage
+=== Configure file format and storage
 By default, ws-rsync will store the configure file to $HOME/.ws-rsync
 The configure file have name format by: `.config_<hash_md5_of_abs_path_of_local_ws_dir`
 
@@ -77,7 +75,7 @@ The reason I do that because we will have multiple workspace , each workspace fo
 the I use the ABS PATH of local Workspace and using MD5 of the ABS PATH as Identifier for configure file name
 then in the same local system, the configuration file will be unique
 
-==== Flow working diagram
+=== Flow working diagram
 
 [.text-center]
 .Flow Working of ws-rsync
@@ -92,7 +90,3 @@ User -> "ws-rsync": input configure
 "ws-rsync" -> "ws-rsync": run start
 "ws-rsync" -> User: Success to run
 ----
-
-=== How it works
-
-=== Conclusion

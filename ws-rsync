@@ -275,8 +275,6 @@ function validate_ssh_connection(){
 }
 
 function validate_ws_config(){
-    echo "please wait for validate configure"
-    echo "validating local dir $local_dir"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     . ${ws_cfg_file}
     temp=""
@@ -286,7 +284,6 @@ function validate_ws_config(){
         echo "create $local_dir"
         mkdir -p ${local_dir}
     fi
-    echo "Validating ssh connection"
     validate_ssh_connection
     return
 }
@@ -405,8 +402,8 @@ function run_force_upload(){
 
     validate_ws_config
     download_entry=$1
-    local_realpath=$(realpath --relative-to=${local_dir} ${download_entry})
-    local_file_dirpath=$(dirname "$local_realpath")
+    abs_download_entry=$(realpath -m ${download_entry})
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_download_entry})
 
     src=${local_dir}/./${local_realpath}
     des=${ssh_acc}:"${remote_dir}/"
@@ -426,7 +423,6 @@ function run_force_download(){
 
     download_entry=$1
     local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
-
     src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
     des="${local_dir}/./"
 
@@ -470,7 +466,8 @@ function run_start(){
 
 function ssh_execute_cmd(){
     remote_dir=$1
-    cmd=$2
+    shift
+    cmd=$@
     SSH_CMD=
     # if ssh_pass is used, then use ssh pass as authenticate method
     if [[ ! -z "${ssh_acc}" ]]; then
@@ -491,7 +488,7 @@ function ssh_execute_cmd(){
     else
         echo "not existed ssh_acc, assume run in local"
     fi
-    echo "$SSH_CMD"
+    echo "${SSH_CMD} \"cd ${remote_dir} ; $cmd\"" |bash
 }
 
 function run_remote(){

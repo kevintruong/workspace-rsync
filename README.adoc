@@ -1,5 +1,5 @@
 ---
-title: "Workspace Rsync Auto Sync Up Your Local With Remote"
+title: "Workspace Rsync"
 dte: 2020-04-18T04:39:36Z
 draft: true
 ---
@@ -13,7 +13,7 @@ draft: true
 :sectnumlevels: 5
 
 //tag::readme[]
-== Workspace Rsync Auto Sync Up Your Local With Remote
+== Workspace Rsync
 
 === What is Workspace Rsync ?
 Features:
