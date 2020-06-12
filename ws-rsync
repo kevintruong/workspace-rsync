@@ -79,8 +79,9 @@ function watch_dir_inotify(){
     inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' ${watch_dir} | while read event dir file ; do
            ret=$(is_tracked_by_git ${dir} ${file})
            if [[ ${ret} ]]; then
-               echo "update file $file by rsync"
+               echo "$(date +%H-%M-%S) $file - START"
                rsync_files_to_remote ${dir}${file}  >/dev/null 2>&1
+               echo "$(date +%H-%M-%S) $file - SUCCESS"
            else
                echo "ignored update $file"
            fi
@@ -118,7 +119,7 @@ function rsync_execute(){
             SSH_OPTS="${SSH_OPTS} -i $ssh_key"
             RSYNC_CMD="${RSYNC_CMD} -e \"$SSH_OPTS\""
         else
-            # Work arround for ":" if non ssh
+            # Work around for ":" if non ssh
             src=$(echo "$src" | tr ":" " ")
             des=$(echo "$des" | tr ":" " ")
         fi
