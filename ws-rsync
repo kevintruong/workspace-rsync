@@ -126,7 +126,6 @@ function rsync_execute(){
 
     RSYNC_CMD="$RSYNC_CMD $src $des"
     rsync_execute_cmd=$(printf "%q " ${RSYNC_CMD};echo)
-    printf "${rsync_execute_cmd}"
     printf "${rsync_execute_cmd}" | bash
 }
 
@@ -570,4 +569,3 @@ esac
 }
 
 run "$@";
-#get_ws_config_fil
