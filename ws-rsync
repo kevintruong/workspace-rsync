@@ -405,12 +405,33 @@ function run_force_upload(){
     . ${ws_cfg_file}
 
     validate_ws_config
-    download_entry=$1
-    abs_download_entry=$(realpath -m ${download_entry})
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_download_entry})
+    upload_entry=$1
+    abs_upload_entry=$(realpath -m ${upload_entry})
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_upload_entry})
 
     src=${local_dir}/./${local_realpath}
     des=${ssh_acc}:"${remote_dir}/"
+
+    rsync_execute ${src} ${des} true
+}
+
+function run_force_upload_to(){
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        run_init
+    fi
+    . ${ws_cfg_file}
+    validate_ws_config
+
+    upload_entry=$1
+    remote_des=$2
+
+    abs_upload_entry=$(realpath -m ${upload_entry})
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_upload_entry})
+
+    src=${local_dir}/./${local_realpath}
+    des=${ssh_acc}:${remote_des}
 
     rsync_execute ${src} ${des} true
 }
@@ -425,11 +446,11 @@ function run_force_download(){
     . ${ws_cfg_file}
     validate_ws_config
 
-    download_entry=$1
+    upload_entry=$1
 
-    echo "Download Entry Path $download_entry"
-    abs_download_entry=$(realpath -m ${download_entry})
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_download_entry})
+    echo "Download Entry Path $upload_entry"
+    abs_upload_entry=$(realpath -m ${upload_entry})
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_upload_entry})
     echo "Relative entry path  $local_realpath -relative with $local_dir"
     echo ${local_realpath}
     src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
