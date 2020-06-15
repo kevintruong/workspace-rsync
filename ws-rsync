@@ -127,7 +127,6 @@ function rsync_execute(){
 
     RSYNC_CMD="$RSYNC_CMD $src $des"
     rsync_execute_cmd=$(printf "%q " ${RSYNC_CMD};echo)
-    printf "${rsync_execute_cmd}"
     printf "${rsync_execute_cmd}" | bash
 }
 
@@ -276,8 +275,6 @@ function validate_ssh_connection(){
 }
 
 function validate_ws_config(){
-    echo "please wait for validate configure"
-    echo "validating local dir $local_dir"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     . ${ws_cfg_file}
     temp=""
@@ -287,7 +284,6 @@ function validate_ws_config(){
         echo "create $local_dir"
         mkdir -p ${local_dir}
     fi
-    echo "Validating ssh connection"
     validate_ssh_connection
     return
 }
@@ -446,13 +442,9 @@ function run_force_download(){
     . ${ws_cfg_file}
     validate_ws_config
 
-    upload_entry=$1
+    download_entry=$1
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
 
-    echo "Download Entry Path $upload_entry"
-    abs_upload_entry=$(realpath -m ${upload_entry})
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_upload_entry})
-    echo "Relative entry path  $local_realpath -relative with $local_dir"
-    echo ${local_realpath}
     src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
     des="${local_dir}/./"
 
@@ -492,6 +484,49 @@ function run_start(){
     echo "$relative_path" >> /tmp/ws-rsync.log
     watch_dir_inotify ${local_dir}/${relative_path}
     exit 0
+}
+
+function ssh_execute_cmd(){
+    remote_dir=$1
+    shift
+    cmd=$@
+    SSH_CMD=
+    # if ssh_pass is used, then use ssh pass as authenticate method
+    if [[ ! -z "${ssh_acc}" ]]; then
+        SSH_CMD="ssh"
+        if [[ ! -z ${ssh_pass} ]];then
+            SSH_CMD="sshpass -p$ssh_pass $SSH_CMD"
+        else #otherwise, use ssh private key or non authenticate
+            if [[ ! -z ${ssh_key} ]]; then
+                SSH_OPTS="-i $ssh_key"
+                SSH_CMD="${SSH_CMD} ${SSH_OPTS}"
+            fi
+        fi
+
+        if [[ ! -z ${ssh_port} ]];then
+            SSH_CMD="$SSH_CMD -p $ssh_port"
+        fi
+        SSH_CMD="$SSH_CMD $ssh_acc"
+    else
+        echo "not existed ssh_acc, assume run in local"
+    fi
+    echo "${SSH_CMD} \"cd ${remote_dir} ; $cmd\"" |bash
+}
+
+function run_remote(){
+    echo "run remote $@"
+    cmd="$@"
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ -z "$ws_cfg_file" ]];then
+        echo "error on get configure"
+        echo "please rerun ws-rsync init"
+        exit -1
+    fi
+    . ${ws_cfg_file}
+    validate_ws_config
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${CUR_WORK_DIR})
+    remote_dir=${remote_dir}/./${local_realpath}
+    ssh_execute_cmd ${remote_dir} ${cmd}
 }
 
 # ws-rsync.sh init : you will run the initial steps for the current workspace dir"
@@ -543,6 +578,11 @@ function run
                 exit 1
             fi
         ;;
+    "" | "call")
+        shift
+        echo "run command $@ remote"
+        run_remote $@
+    ;;
     *)
         echo "Error: '$subcommand' is not a known subcommand." >&2
         echo "       Run '$ProgName --help' for a list of known subcommands." >&2
@@ -552,4 +592,3 @@ esac
 }
 
 run "$@";
-#get_ws_config_fil

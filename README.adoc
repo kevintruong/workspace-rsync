@@ -13,9 +13,12 @@ draft: true
 :sectnumlevels: 5
 
 //tag::readme[]
-== Workspace Rsync
-
 === What is Workspace Rsync ?
+
+Simple and lightweight bash script can help to quick sync a change from local workspace to remote workspace.
+, support to upload resource to and download resource from remote workspace.
+Another useful of the tool is support to quickly run command on remote workspace.
+
 Features:
 
 * Automatically sync up my local working space (directories) to remote working space
@@ -25,23 +28,27 @@ Features:
 ** Inotify/monitoring changing happend in your local working dir and update to remote working dir
 * Support to sync up the whole working dir from remote to local and otherwise
 * Support configure file for auto-reload the previous configure
-* Saving the configure file to $HOME/.ws-rsync/.config_<name_of_monitoring_workspace>, Auto apply the configuration from
-there when user run the utility on configured workspace
-* If the local has not the workspace matching with remote side, then ask user to allow for downloading the remote side. And otherwise.
-if remote has not the Workspace which existed on local, the ask user to allow for uploading the local version to remote. But I
-will follow the simple methology here that Remote Side always have the latest version, The local will always clone workspace from remote side.
-* Support local rsync. In the case, don't need push any infomation in --ssh-acc/--ssh-pass/--ssh-key , the ws-rsync will becall in local
+* Saving the configure file to $HOME/.ws-rsync/config_<name_of_monitoring_workspace>, Auto apply the configuration from there when user run the utility on configured workspace
+* If the local has not the workspace matching with remote side, then ask user to allow for downloading the remote side.
+And otherwise.
+if remote has not the Workspace which existed on local, the ask user to allow for uploading the local version to remote.
+But I will follow the simple methology here that Remote Side always have the latest version, The local will always clone workspace from remote side.
+* Support local rsync.
+In the case, don't need push any infomation in --ssh-acc/--ssh-pass/--ssh-key , the ws-rsync will becall in local
+* Support remote command call : Run command on remote
 
-=== Getting start
+== Getting start
 
-==== Install
+=== Install
 
-ideally, The utility is not dependency on any other tools. But if your remote side is not support private key/public key pair for authentication
-then you should use ssh password for authentication. Then you need `sshpass`
+Ideally, the utility is not dependency on any other tools.
+But if your remote side is not support private key/public key pair for authentication then you should use ssh password for authentication.
+Then you need `sshpass`
 
-Another side is how the ws-rsync daemon know about there have a changed/create file. I used `find` with `diff_time` pooling mechanism to
-check the status of files in local side. But there will have window time `diff_time` to the next check
-If you want the process more realtime, then you need `inotify-tools`
+Another side is how the ws-rsync daemon know about there have a changed/create file.
+I used `find` with `diff_time` pooling mechanism to check the status of files in local side.
+But there will have window time `diff_time` to the next check If you want the process more realtime, then you need `inotify-tools`
+
 [source,shell]
 ----
 #dependency to run ssh with password authentication
@@ -51,7 +58,7 @@ sudo cp ws-rsync /usr/local/bin
 export PATH=$PATH:/usr/local/bin
 ----
 
-==== Configure and run the utility
+=== Configure and run the utility
 
 [source,shell]
 ----
@@ -77,28 +84,75 @@ ws-rsync config \
 ws-rsync start
 ----
 
-==== Sub-Commands
+=== Sub-Commands
 
-* `ws-rsync run force_download <workspace_file_path>`
-Download file from remote workspace, support relative/absolute path
-Examples:
+==== Force download from remote
+
+[source]
+----
+ws-rsync run force_download <workspace_file_path>
+----
+
+* Example:
+
 [source,shell]
 ----
 ws-rsync run force_download /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
 ws-rsync run force_download ./version.h
 ----
 
-* `ws-rsync run force_upload <workspace_file_path>`
+==== Upload to remote workspace
+
 Upload `workspace_file_path` to remote, support relative/absolute path
+
+[source]
+----
+ws-rsync run force_upload <workspace_file_path>
+----
+
+* Example:
+
 [source,shell]
 ----
 ws-rsync run force_upload /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
 ws-rsync run force_upload ./version.h
 ----
 
-* `ws-rsync run remote_local_sync`
+==== Force replace local by remote
+
 Discard every changes on local and apply remote version for local workspace
 
-* `ws-rsync run local_remote_sync`
+[source]
+----
+ws-rsync run remote_local_sync
+----
+
+==== Force relplace remote by local
+
+[source]
+----
+ws-rsync run local_remote_sync
+----
+
 Discard every changes on remote and apply local version for remote workspace
+
+=== Run command in remote
+
+Run `command` in remote workspace
+
+[source]
+----
+ws-rsync call <command>
+----
+
+* Example:
+
+[source,shell]
+----
+# ws-rsync call <command>
+ws-rsync call git status
+ws-rsync call ls -al
+----
+
 //end::readme[]
+
