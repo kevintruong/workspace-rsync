@@ -8,18 +8,47 @@ DEFAULT_DIFF_TIME=3
 
 mkdir -p $HOME/.ws-rsync/
 
+
+# Default command line arguments
+VERBOSE="verbose"
+PORT=
+MY_NAME=${ProgName}
+
+logdebug() {
+	# Only log to stdout when verbose is turned on
+	if [[ "${VERBOSE}" = "debug" ]]; then
+		echo "$(date +'%Y-%m-%d %H:%M:%S') ${MY_NAME}: [DEBUG] ${*}"
+	fi
+}
+
+logmsg() {
+	# Only log to stdout when verbose/debug is turned on
+	if [[ "${VERBOSE}" = "verbose" ]] || [[ "${VERBOSE}" = "debug" ]]; then
+		echo "$(date +'%Y-%m-%d %H:%M:%S') ${MY_NAME}: [INFO]  ${*}"
+	fi
+}
+
+logerr() {
+	echo "$(date +'%Y-%m-%d %H:%M:%S') ${MY_NAME}: [ERROR] ${*}" >&2
+}
+
 function usage
 {
     echo "basically, workspace-rsync will create .config_<name-of-workspace-dir> in your $HOME when you run the utility with out any confile
           then the tool will check whether or not the configure in $HOME then it will auto apply the configure"
 
-    echo "usage: ws-rsync config --ssh keivn@my-sample-server --ssh-key $HOME/.ssh/sample_key --local $(pwd) --remote /mnt/my-project/"
+    echo "usage: ws-rsync config --ssh kevin@kencancode.xyz \\
+                                 --ssh-key $HOME/.ssh/sample_key \\
+                                 --local $(pwd) \\
+                                 --remote /mnt/my-project/ \\
+                                 --sudo true\\
+                                 --ssh-port 16022"
 
     echo "   ";
     echo "  --ssh-acc               : Your ssh account kevin@kencancode ";
     echo "  --ssh-pass              : use ssh account password for authenticate; required sshpass";
     echo "  --ssh-key               : your ssh private key absolute path <~/home/kevin/.ssh/id_rsa>";
-    echo "  --ssh-port              : custom ssh port";
+    echo "  --ssh-port              : custom ssh port,options";
     echo "  --remote                : remote work space dir /mnt/KEVIN/TestABC";
     echo "  --diff_time             : diff_time to check changed on local side";
     echo "  --sudo                  : sudo permission --sudo true/false";
@@ -79,9 +108,9 @@ function watch_dir_inotify(){
     inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' ${watch_dir} | while read event dir file ; do
            ret=$(is_tracked_by_git ${dir} ${file})
            if [[ ${ret} ]]; then
-               echo "$(date +%H-%M-%S) $file - START"
+               logmsg "$file - START"
                rsync_files_to_remote ${dir}${file}  >/dev/null 2>&1
-               echo "$(date +%H-%M-%S) $file - SUCCESS"
+               logmsg "$file - SUCCESS"
            else
                echo "ignored update $file"
            fi
@@ -169,7 +198,7 @@ get_ws_config_file() {
     config_file="$HOME/.ws-rsync/config_${MD5_CUR_DIR}"
 
     if [[ ${ABS_DIR_PATH} = "/" ]]; then
-        echo "Not found configure file recursively, exit -1" >&2
+        logerr "Not found configure file recursively, exit -1"
         exit -1
     fi
     if [[ -f ${config_file} ]]; then
@@ -193,7 +222,7 @@ function get_ws_config(){
 
 function write_ws_config(){
     ws_cfg_file=$1
-    echo "ws configure file: $ws_cfg_file"
+    logdebug "ws configure file: $ws_cfg_file"
     echo "clean up the workspace configure file"
     echo  > ${ws_cfg_file}
 
@@ -238,18 +267,11 @@ function write_ws_config(){
     return;
 }
 
-function validate_rsync_transportor() {
-#    test_file="/tmp/rsync_test"
-#    touch ${test_file}
-#    rsync_files_to_remote $test_file
-    return;
-}
-
 
 function validate_ssh_connection(){
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
-        echo "error on get configure"
+        logerr "error on get configure"
         run_init
     fi
     . ${ws_cfg_file}
@@ -257,7 +279,7 @@ function validate_ssh_connection(){
     if [[ ! -z ${ssh_pass} ]];then
         retVal=$(sshpass -p${ssh_pass} ssh -p ${ssh_port} ${ssh_acc} exit);
         if [[ ${retVal} == 255 ]];then
-            echo "ssh connection is not active"
+            logerr "ssh connection is not active"
             read -r "Press any key to continue or Ctrl-C to exit:" temp
         else
             echo "ssh connection is active"
@@ -268,7 +290,7 @@ function validate_ssh_connection(){
     if [[ ! -z ${ssh_key} ]];then
         retVal=$(ssh -q -i ${ssh_key} ${ssh_acc} exit);
         if [[ ${retVal} == 255 ]];then
-            echo "ssh connection is not active"
+            logerr "ssh connection is not active"
             read -r "Press any key to continue or Ctrl-C to exit:" temp
         fi
     fi
@@ -279,7 +301,7 @@ function validate_ws_config(){
     . ${ws_cfg_file}
     temp=""
     if [[ ! -d ${local_dir} ]]; then
-        echo "Warmning look like $local_dir is not existed"
+        logerr "Warmning look like $local_dir is not existed"
         read -r 'Press any key to continue or Ctrl-C to exit:' temp
         echo "create $local_dir"
         mkdir -p ${local_dir}
@@ -376,7 +398,7 @@ function run_remote_local_sync(){
 function run_local_remote_sync(){
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
-        echo "error on get configure"
+        logerr "error on get configure"
         run_init
     fi
     . ${ws_cfg_file}
@@ -387,7 +409,7 @@ function run_local_remote_sync(){
 
     src=${local_dir}/./$local_realpath
     des=${ssh_acc}:"${remote_dir}/./"
-    echo "sync up all data in local $src  to remote $des"
+    logmsg "sync up all data in local $src  to remote $des"
     rsync_execute ${src} ${des}
     return
 }
@@ -435,8 +457,7 @@ function run_force_upload_to(){
 function run_force_download(){
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
-        echo "error on get configure"
-        echo "please rerun ws-rsync init"
+        logerr "error on get configure Please rerun ws-rsync init"
         exit -1
     fi
     . ${ws_cfg_file}
@@ -452,10 +473,10 @@ function run_force_download(){
 }
 
 function run_start(){
-    echo "run_start"
+    logmsg "run_start"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ ! -f "$ws_cfg_file" ]];then
-        echo "error on get configure"
+        logerr "error on get configure"
         run_init
     fi
     . ${ws_cfg_file}
@@ -475,13 +496,12 @@ function run_start(){
     set -- "${args[@]}"
 
     if ! [[ -x "$(command -v inotifywait)" ]]; then
-        echo 'Warmning: inotifytools is not installed' >&2
-        echo "Warmning: wr-sync will use pooling check per $diff_time is not installed" >&2
+        logmsg "Warmning: inotifytools is not installed"
+        logmsg "Warmning: wr-sync will use pooling check per $diff_time is not installed"
         watch_dir
         exit 0
     fi
     relative_path=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
-    echo "$relative_path" >> /tmp/ws-rsync.log
     watch_dir_inotify ${local_dir}/${relative_path}
     exit 0
 }
