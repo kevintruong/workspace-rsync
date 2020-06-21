@@ -1,0 +1,21 @@
+---
+title: "Work Process With Workspace-Rsync"
+dte: 2020-04-18T04:39:36Z
+draft: true
+---
+
+:projectdir: ../../
+:imagesdir: ${projectdir}/assets/
+:toclevels: 4
+:toc:
+:sectnums:
+:source-highlighter: coderay
+:sectnumlevels: 5
+
+== Why I make workspace-rsync
+
+* TODO talk about why I make it
+
+== My process with workspace-rsync
+
+* TODO Describe about flow work - step by step to make workspace-rsync great
