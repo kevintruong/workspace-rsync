@@ -104,18 +104,51 @@ function is_tracked_by_git(){
     popd > /dev/null 2>&1
 }
 
+################################################################
+# The logic here:
+# inotifywait check the file change. If there have not any change need to sync
+# for long time. 1 hour from the latest sync. Suppose that we go down now
+# let shutdown the remote to costing down. But the monitor still on the track.
+# If there have a change after that. the daemon will turn on the remote.
+# re-update the authenticate information using hook command/script.
+# the daemon also monitor or check the remote side. If there have
+# any issue with remote. The daemon will run the hook-self-repair to bring it back
+################################################################
 function watch_dir_inotify(){
     watch_dir=$1
-    inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' --exclude='*~' --exclude='.*.swp' ${watch_dir} | while read event dir file ; do
-           ret=$(is_tracked_by_git ${dir} ${file})
-           if [[ ${ret} ]]; then
-               logmsg "$file - START"
-               rsync_files_to_remote ${dir}${file}  >/dev/null 2>&1
-               logmsg "$file - SUCCESS"
-           else
-               echo "ignored update $file"
-           fi
-    done
+    #TODO add timeout here. After 1 hour with no sync up, then terminate the remote
+    # then restart inotify again.
+    # if there have a new change. Bringe the remote back, double check the credentials
+    # re-update credentials if there have change.
+    logmsg "Starting inotifywait: Monitor $watch_dir, timeout 3600 seconds"
+    inotifywait -mr \
+                --format '%e %w %f' \
+                -e close_write \
+                --exclude '/\.' \
+                --exclude '/\.git' \
+                --exclude='*~' \
+                --exclude='.*.swp' \
+                ${watch_dir} | {
+
+        previous_SECONDS=0
+        previous_event=
+        while read event dir file ;
+        do
+               ret=$(is_tracked_by_git ${dir} ${file})
+               if [[ ${ret} ]]; then
+                   logmsg "$file - START"
+                   rsync_files_to_remote ${dir}${file}  >/dev/null 2>&1
+                   logmsg "$file - SUCCESS"
+               else
+                   echo "ignored update $file"
+               fi
+               if [[ "$event" = "$previous_event" && $SECONDS <= ${previous_SECONDS} + 3600 ]]; then
+                  continue
+               fi
+               previous_SECONDS=$SECONDS previous_event=${event}
+        done
+    # TODO: timeout let update status of remote instance
+    }
 }
 
 function rsync_execute(){
