@@ -106,7 +106,7 @@ function is_tracked_by_git(){
 
 function watch_dir_inotify(){
     watch_dir=$1
-    inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' ${watch_dir} | while read event dir file ; do
+    inotifywait -mr --format '%e %w %f' -e close_write --exclude '/\.' --exclude '/\.git' --exclude='*~' --exclude='.*.swp' ${watch_dir} | while read event dir file ; do
            ret=$(is_tracked_by_git ${dir} ${file})
            if [[ ${ret} ]]; then
                logmsg "$file - START"
@@ -469,6 +469,26 @@ function run_force_download(){
 
     src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
     des="${local_dir}/./"
+
+    rsync_execute ${src} ${des} true
+}
+
+function run_force_download_to(){
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ -z "$ws_cfg_file" ]];then
+        logerr "error on get configure Please rerun ws-rsync init"
+        exit -1
+    fi
+    . ${ws_cfg_file}
+    validate_ws_config
+
+    download_entry=$1
+    download_to=$2
+
+    local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
+
+    src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
+    des="${download_to}/./"
 
     rsync_execute ${src} ${des} true
 }
