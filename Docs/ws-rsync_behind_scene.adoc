@@ -42,12 +42,12 @@ GitHub Repo: `https://github.com/kevintruong/workspace-rsync`
 ws-rsync.sh init : User will run the initial steps for the current workspace dir"
 run the command bellow to update your configure which already done in initial step
 
-* input: `ssh_acc`
-* input: `ssh_key` private key
-* input: `ssh_pass` password
-* input: `local_dir` user want to monitor
-* input: `remote_dir` for mapping local workspace to remote workspace
-* input: diff_time (optional): polling time period to check the changed in `local_dir`
+* input: `connection_ssh_acc`
+* input: `connection_ssh_key` private key
+* input: `connection_ssh_pass` password
+* input: `wsConfig_local_dir` user want to monitor
+* input: `wsConfig_remote_dir` for mapping local workspace to remote workspace
+* input: diff_time (optional): polling time period to check the changed in `wsConfig_local_dir`
 
 ws-rsync.sh config --ssh kevin@exampleserver --ssh-key $HOME/.ssh/examplekey ...
 After inital/configue then can use the script to run some action

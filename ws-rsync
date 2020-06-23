@@ -5,6 +5,7 @@ CUR_WORK_DIR=$(pwd)
 ProgName=$(basename $0)
 
 DEFAULT_DIFF_TIME=3
+DEFAULT_CONFIG_FILE_NAME=".ws-rsync.yml"
 
 mkdir -p $HOME/.ws-rsync/
 
@@ -42,7 +43,7 @@ function usage
                                  --ssh-key $HOME/.ssh/sample_key \\
                                  --local $(pwd) \\
                                  --remote /mnt/my-project/ \\
-                                 --sudo true\\
+                                 --connection_sudo true\\
                                  --ssh-port 16022"
 
     echo "   ";
@@ -51,9 +52,26 @@ function usage
     echo "  --ssh-key               : your ssh private key absolute path <~/home/kevin/.ssh/id_rsa>";
     echo "  --ssh-port              : custom ssh port,options";
     echo "  --remote                : remote work space dir /mnt/KEVIN/TestABC";
-    echo "  --diff_time             : diff_time to check changed on local side";
-    echo "  --sudo                  : sudo permission --sudo true/false";
+    echo "  --connection_diff_time             : connection_diff_time to check changed on local side";
+    echo "  --connection_sudo                  : connection_sudo permission --connection_sudo true/false";
     echo "  -h | --help             : Help";
+}
+
+function parse_yaml_config {
+   local prefix=$2
+   local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+   sed -ne "s|^\($s\):|\1|" \
+        -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+   awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+         printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+      }
+   }'
 }
 
 function dump_config()
@@ -73,14 +91,14 @@ function parse_conf_args
   # named args
   while [[ "$1" != "" ]]; do
       case "$1" in
-          --ssh-acc )                           ssh_acc="$2";   shift;;
-          --ssh-port )                          ssh_port="$2"; shift;;
-          --ssh-pass )                          ssh_pass="$2";   shift;;
-          --ssh-key )                           ssh_key="$2";   shift;;
-          --local )                             local_dir="$2";   shift;;
-          --remote )                            remote_dir="$2";   shift;;
-          --diff_time )                         diff_time="$2"; shift;;
-          --sudo )                              sudo="$2"; shift;;
+          --ssh-acc )                           connection_ssh_acc="$2";   shift;;
+          --ssh-port )                          connection_ssh_port="$2"; shift;;
+          --ssh-pass )                          connection_ssh_pass="$2";   shift;;
+          --ssh-key )                           connection_ssh_key="$2";   shift;;
+          --local )                             wsConfig_local_dir="$2";   shift;;
+          --remote )                            wsConfig_remote_dir="$2";   shift;;
+          --diff_time )                         connection_diff_time="$2"; shift;;
+          --sudo )                              connection_sudo="$2"; shift;;
           -h | --help )                         usage;          exit;; # quit and show usage
           dump )                                dump_config; exit;;
           * )                           args+=("$1")             # if no match, add it to the positional args
@@ -142,10 +160,10 @@ function watch_dir_inotify(){
                else
                    echo "ignored update $file"
                fi
-               if [[ "$event" = "$previous_event" && $SECONDS <= ${previous_SECONDS} + 3600 ]]; then
-                  continue
-               fi
-               previous_SECONDS=$SECONDS previous_event=${event}
+#               if [[ "$event" = "$previous_event" && $SECONDS <= ${previous_SECONDS} + 3600 ]]; then
+#                  continue
+#               fi
+#               previous_SECONDS=$SECONDS previous_event=${event}
         done
     # TODO: timeout let update status of remote instance
     }
@@ -159,27 +177,27 @@ function rsync_execute(){
     SSH_OPTS="ssh -T -o Compression=no -x"
     RSYNC_CMD="rsync -aHAXxR --numeric-ids --progress --exclude=.git/ --exclude=*~"
 
-    if [[ -f ${local_dir}/.gitignore ]]; then
+    if [[ -f ${wsConfig_local_dir}/.gitignore ]]; then
         if [[ -z "$force_sync" || ${force_sync} == false ]]; then
-            RSYNC_CMD="$RSYNC_CMD --exclude-from='${local_dir}/.gitignore'"
+            RSYNC_CMD="$RSYNC_CMD --exclude-from='${wsConfig_local_dir}/.gitignore'"
         fi
     fi
-    if [[ ! -z ${sudo} ]];then
+    if [[ ! -z ${connection_sudo} ]];then
         RSYNC_CMD="$RSYNC_CMD --rsync-path=\"sudo rsync\""
     fi
 
     # SSH OPTIONS
-    if [[ ! -z ${ssh_port} ]]; then
-       SSH_OPTS="$SSH_OPTS -p ${ssh_port}"
+    if [[ ! -z ${connection_ssh_port} ]]; then
+       SSH_OPTS="$SSH_OPTS -p ${connection_ssh_port}"
     fi
 
-    # if ssh_pass is used, then use ssh pass as authenticate method
-    if [[ ! -z ${ssh_pass} ]];then
-        SSHPASS_CMD="sshpass -p$ssh_pass"
+    # if connection_ssh_pass is used, then use ssh pass as authenticate method
+    if [[ ! -z ${connection_ssh_pass} ]];then
+        SSHPASS_CMD="sshpass -p$connection_ssh_pass"
         RSYNC_CMD="${SSHPASS_CMD} ${RSYNC_CMD} -e \"$SSH_OPTS\""
     else #otherwise, use ssh private key or non authenticate
-        if [[ ! -z ${ssh_key} ]]; then
-            SSH_OPTS="${SSH_OPTS} -i $ssh_key"
+        if [[ ! -z ${connection_ssh_key} ]]; then
+            SSH_OPTS="${SSH_OPTS} -i $connection_ssh_key"
             RSYNC_CMD="${RSYNC_CMD} -e \"$SSH_OPTS\""
         else
             # Work around for ":" if non ssh
@@ -196,40 +214,39 @@ function rsync_execute(){
 function rsync_files_to_remote(){
     changed_file=$1
 
-    local_realpath=$(realpath --relative-to=${local_dir} ${changed_file})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} ${changed_file})
     local_file_dirpath=$(dirname "$local_realpath")
 
-    src=${local_dir}/./${local_realpath}
-    des=${ssh_acc}:"${remote_dir}"
+    src=${wsConfig_local_dir}/./${local_realpath}
+    des=${connection_ssh_acc}:"${wsConfig_remote_dir}"
     rsync_execute ${src} ${des} &
     return
 }
 
 function watch_dir() {
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
 
-    if [[ -z "${diff_time}" ]];then
-        diff_time=3
+    if [[ -z "${connection_diff_time}" ]];then
+        connection_diff_time=3
     fi
     abs_local_dir=$(echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")")
-    echo watching folder ${abs_local_dir} every ${diff_time} secs.
+    echo watching folder ${abs_local_dir} every ${connection_diff_time} secs.
 
     while [[ true ]]
     do
-        files=`find ${abs_local_dir} -type f -newermt "$diff_time seconds ago"`
+        files=`find ${abs_local_dir} -type f -newermt "$connection_diff_time seconds ago"`
         if [[ ${files} != "" ]] ; then
             rsync_files_to_remote ${files} &
         fi
-        sleep ${diff_time}
+        sleep ${connection_diff_time}
     done
 }
 
 get_ws_config_file() {
     echo "value of $1" >> /tmp/ws-rsync.log
     ABS_DIR_PATH=$1
-    MD5_CUR_DIR=$(echo -n ${ABS_DIR_PATH} | md5sum | awk '{print $1}')
-    config_file="$HOME/.ws-rsync/config_${MD5_CUR_DIR}"
+    config_file="${ABS_DIR_PATH}/.ws-rsync.yml"
 
     if [[ ${ABS_DIR_PATH} = "/" ]]; then
         logerr "Not found configure file recursively, exit -1"
@@ -254,59 +271,11 @@ function get_ws_config(){
     return 1
 }
 
-function write_ws_config(){
-    ws_cfg_file=$1
-    logdebug "ws configure file: $ws_cfg_file"
-    echo "clean up the workspace configure file"
-    echo  > ${ws_cfg_file}
-
-    if [[ ! -z ${ssh_acc} ]]; then
-        echo "${!ssh_acc@}=$ssh_acc" >> ${ws_cfg_file}
-    fi
-
-    if [[ ! -z ${ssh_key} ]]; then
-        echo "${!ssh_key@}=$ssh_key" >> ${ws_cfg_file}
-    fi
-
-    if [[ ! -z ${ssh_port} ]]; then
-        echo "${!ssh_port@}=$ssh_port" >> ${ws_cfg_file}
-    fi
-
-    if [[ ! -z ${ssh_pass} ]]; then
-        echo "${!ssh_pass@}=$ssh_pass" >> ${ws_cfg_file}
-    fi
-
-    if [[ ! -z ${local_dir} ]]; then
-        echo "${!local_dir@}=$local_dir" >> ${ws_cfg_file}
-    fi
-
-    if [[ ! -z ${remote_dir} ]]; then
-        echo "${!remote_dir@}=$remote_dir" >> ${ws_cfg_file}
-    fi
-
-    if [[ -z ${diff_time} ]];then
-        diff_time=${DEFAULT_DIFF_TIME}
-    fi
-
-    if [[ ! -z ${diff_time} ]]; then
-        echo "${!diff_time@}=$diff_time" >> ${ws_cfg_file}
-    fi
-
-    if [[ ! -z ${sudo} ]]; then
-        echo "${!sudo@}=$sudo" >> ${ws_cfg_file}
-    fi
-
-    # if diff_time is NULL then add default value is 3 secs
-
-    return;
-}
-
-
 function validate_ssh_connection(){
     temp=""
-    if [[ ! -z ${ssh_pass} ]];then
-        logmsg "validating ssh connection for ${ssh_acc}"
-        sshpass -p${ssh_pass} ssh -o ConnectTimeout=${timeout} -p ${ssh_port} ${ssh_acc} exit
+    if [[ ! -z ${connection_ssh_pass} ]];then
+        logmsg "validating ssh connection for ${connection_ssh_acc}"
+        sshpass -p${connection_ssh_pass} ssh -o ConnectTimeout=${timeout} -p ${connection_ssh_port} ${connection_ssh_acc} exit
         if [[ $? == 255 || $? == 124 ]];then
             logerr "ssh connection is not active or timeout"
             read -r "Press any key to continue or Ctrl-C to exit:" temp
@@ -316,9 +285,9 @@ function validate_ssh_connection(){
         fi
     fi
 
-    if [[ ! -z ${ssh_key} ]];then
-        logmsg "validating ssh connection for ${ssh_acc}"
-        ssh -o ConnectTimeout=${timeout} -p ${ssh_port} -q -i ${ssh_key} ${ssh_acc} exit
+    if [[ ! -z ${connection_ssh_key} ]];then
+        logmsg "validating ssh connection for ${connection_ssh_acc}"
+        ssh -o ConnectTimeout=${timeout} -p ${connection_ssh_port} -q -i ${connection_ssh_key} ${connection_ssh_acc} exit
         if [[ $? == 255 ]];then
             logerr "ssh connection is not active or timeout"
             exit -1
@@ -330,15 +299,15 @@ function validate_ssh_connection(){
 }
 
 function validate_ws_config(){
-    ssh_port=22
+    connection_ssh_port=22
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
     temp=""
-    if [[ ! -d ${local_dir} ]]; then
-        logerr "Warmning look like $local_dir is not existed"
+    if [[ ! -d ${wsConfig_local_dir} ]]; then
+        logerr "Warmning look like $wsConfig_local_dir is not existed"
         read -r 'Press any key to continue or Ctrl-C to exit:' temp
-        echo "create $local_dir"
-        mkdir -p ${local_dir}
+        echo "create $wsConfig_local_dir"
+        mkdir -p ${wsConfig_local_dir}
     fi
     validate_ssh_connection
     return
@@ -366,13 +335,13 @@ function input_ssh_authenticate(){
         auth_private_key=1
     fi
     if [[ ${auth_private_key} == 1 ]]; then
-         read -p 'Enter your ssh private key:' ssh_key
+         read -p 'Enter your ssh private key:' connection_ssh_key
     else
-        read -sp 'Enter your ssh password: \n' ssh_pass
+        read -sp 'Enter your ssh password: \n' connection_ssh_pass
     fi
-    read -p 'Enter your ssh port (Enter for default: 22) :' ssh_port
-    if [[ -z ${ssh_port} || $((ssh_port)) != ${ssh_port} ]];then
-        ssh_port=22
+    read -p 'Enter your ssh port (Enter for default: 22) :' connection_ssh_port
+    if [[ -z ${connection_ssh_port} || $((connection_ssh_port)) != ${connection_ssh_port} ]];then
+        connection_ssh_port=22
     fi
 }
 get_ws_config_file_path() {
@@ -383,28 +352,17 @@ get_ws_config_file_path() {
 }
 
 function run_init(){
-    echo "run_init"
-    ws_cfg_file=$(get_ws_config_file_path)
-    local_dir=$(pwd)
-    read -p "Enter your ssh account:" ssh_acc
-    input_ssh_authenticate
-    read -p "Enter your remote workspace:" remote_dir
-    write_ws_config ${get_ws_config_file}
-    return
-}
-
-function run_configue(){
+    logmsg "run_init"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
-    if [[ ! -z "$ws_cfg_file" ]]; then
-       . ${ws_cfg_file}
+    if [[ -z "$ws_cfg_file" ]];then
+        logerr: "error on get configure file"
     else
-        ABS_DIR_PATH=${CUR_WORK_DIR}
-        MD5_CUR_DIR=$(echo -n ${ABS_DIR_PATH} | md5sum | awk '{print $1}')
-        ws_cfg_file="$HOME/.ws-rsync/config_${MD5_CUR_DIR}"
+        logerr "already have ws-config at $ws_cfg_file"
+        read -n1 -r -p "Press space to continue init ws-rsync in $CUR_WORK_DIR ...Or Ctrl-C to abort" key
     fi
-    parse_conf_args "$@"
-    write_ws_config ${ws_cfg_file}
-    return;
+    cp /var/lib/ws-rsync/temp.yml ${CUR_WORK_DIR}/${DEFAULT_CONFIG_FILE_NAME}
+    vi ${CUR_WORK_DIR}/${DEFAULT_CONFIG_FILE_NAME}
+    return
 }
 
 function run_remote_local_sync(){
@@ -413,17 +371,17 @@ function run_remote_local_sync(){
         echo "error on get configure"
         run_init
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
 
     echo "run_action_remote_local_sync"
 
-    local_realpath=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} ${CUR_WORK_DIR})
 
-    remote_dirname=${remote_dir##*/}
-    remote_parent_dir=$(dirname ${remote_dir})
+    wsConfig_remote_dirname=${wsConfig_remote_dir##*/}
+    remote_parent_dir=$(dirname ${wsConfig_remote_dir})
 
-    src=${ssh_acc}:"$remote_parent_dir/${remote_dirname}/./$local_realpath"
-    des=${local_dir}
+    src=${connection_ssh_acc}:"$remote_parent_dir/${wsConfig_remote_dirname}/./$local_realpath"
+    des=${wsConfig_local_dir}
     echo "sync up all data in remote $src  to local $des"
     rsync_execute ${src} ${des}
     return
@@ -435,14 +393,14 @@ function run_local_remote_sync(){
         logerr "error on get configure"
         run_init
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
 
-    local_realpath=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} ${CUR_WORK_DIR})
 
     echo "run_action_local_remote_sync"
 
-    src=${local_dir}/./$local_realpath
-    des=${ssh_acc}:"${remote_dir}/./"
+    src=${wsConfig_local_dir}/./${local_realpath}
+    des=${connection_ssh_acc}:"${wsConfig_remote_dir}/./"
     logmsg "sync up all data in local $src  to remote $des"
     rsync_execute ${src} ${des}
     return
@@ -454,15 +412,15 @@ function run_force_upload(){
         echo "error on get configure"
         run_init
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
 
     validate_ws_config
     upload_entry=$1
     abs_upload_entry=$(realpath -m ${upload_entry})
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_upload_entry})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${abs_upload_entry})
 
-    src=${local_dir}/./${local_realpath}
-    des=${ssh_acc}:"${remote_dir}/"
+    src=${wsConfig_local_dir}/./${local_realpath}
+    des=${connection_ssh_acc}:"${wsConfig_remote_dir}/"
 
     rsync_execute ${src} ${des} true
 }
@@ -473,17 +431,17 @@ function run_force_upload_to(){
         echo "error on get configure"
         run_init
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
     validate_ws_config
 
     upload_entry=$1
     remote_des=$2
 
     abs_upload_entry=$(realpath -m ${upload_entry})
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${abs_upload_entry})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${abs_upload_entry})
 
-    src=${local_dir}/./${local_realpath}
-    des=${ssh_acc}:${remote_des}
+    src=${wsConfig_local_dir}/./${local_realpath}
+    des=${connection_ssh_acc}:${remote_des}
 
     rsync_execute ${src} ${des} true
 }
@@ -494,14 +452,14 @@ function run_force_download(){
         logerr "error on get configure Please rerun ws-rsync init"
         exit -1
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
     validate_ws_config
 
     download_entry=$1
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${download_entry})
 
-    src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
-    des="${local_dir}/./"
+    src=${connection_ssh_acc}:"${wsConfig_remote_dir}/./${local_realpath}"
+    des="${wsConfig_local_dir}/./"
 
     rsync_execute ${src} ${des} true
 }
@@ -512,15 +470,15 @@ function run_force_download_to(){
         logerr "error on get configure Please rerun ws-rsync init"
         exit -1
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
     validate_ws_config
 
     download_entry=$1
     download_to=$2
 
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${download_entry})
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${download_entry})
 
-    src=${ssh_acc}:"${remote_dir}/./${local_realpath}"
+    src=${connection_ssh_acc}:"${wsConfig_remote_dir}/./${local_realpath}"
     des="${download_to}/./"
 
     rsync_execute ${src} ${des} true
@@ -533,7 +491,7 @@ function run_start(){
         logerr "error on get configure"
         run_init
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
     validate_ws_config
     # positional args
     args=()
@@ -555,36 +513,36 @@ function run_start(){
         watch_dir
         exit 0
     fi
-    relative_path=$(realpath --relative-to=${local_dir} ${CUR_WORK_DIR})
-    watch_dir_inotify ${local_dir}/${relative_path}
+    relative_path=$(realpath --relative-to=${wsConfig_local_dir} ${CUR_WORK_DIR})
+    watch_dir_inotify ${wsConfig_local_dir}/${relative_path}
     exit 0
 }
 
 function ssh_execute_cmd(){
-    remote_dir=$1
+    target_dir=$1
     shift
     cmd=$@
     SSH_CMD=
-    # if ssh_pass is used, then use ssh pass as authenticate method
-    if [[ ! -z "${ssh_acc}" ]]; then
+    # if connection_ssh_pass is used, then use ssh pass as authenticate method
+    if [[ ! -z "${connection_ssh_acc}" ]]; then
         SSH_CMD="ssh"
-        if [[ ! -z ${ssh_pass} ]];then
-            SSH_CMD="sshpass -p$ssh_pass $SSH_CMD"
+        if [[ ! -z ${connection_ssh_pass} ]];then
+            SSH_CMD="sshpass -p$connection_ssh_pass $SSH_CMD"
         else #otherwise, use ssh private key or non authenticate
-            if [[ ! -z ${ssh_key} ]]; then
-                SSH_OPTS="-i $ssh_key"
+            if [[ ! -z ${connection_ssh_key} ]]; then
+                SSH_OPTS="-i $connection_ssh_key"
                 SSH_CMD="${SSH_CMD} ${SSH_OPTS}"
             fi
         fi
 
-        if [[ ! -z ${ssh_port} ]];then
-            SSH_CMD="$SSH_CMD -p $ssh_port"
+        if [[ ! -z ${connection_ssh_port} ]];then
+            SSH_CMD="$SSH_CMD -p $connection_ssh_port"
         fi
-        SSH_CMD="$SSH_CMD $ssh_acc"
+        SSH_CMD="$SSH_CMD $connection_ssh_acc"
     else
-        echo "not existed ssh_acc, assume run in local"
+        echo "not existed connection_ssh_acc, assume run in local"
     fi
-    echo "${SSH_CMD} \"cd ${remote_dir} ; $cmd\"" |bash
+    echo "${SSH_CMD} \"cd ${target_dir} ; $cmd\"" |bash
 }
 
 function run_remote(){
@@ -596,10 +554,10 @@ function run_remote(){
         echo "please rerun ws-rsync init"
         exit -1
     fi
-    . ${ws_cfg_file}
+    eval $(parse_yaml_config ${ws_cfg_file})
     validate_ws_config
-    local_realpath=$(realpath --relative-to=${local_dir} -m ${CUR_WORK_DIR})
-    remote_dir=${remote_dir}/./${local_realpath}
+    local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${CUR_WORK_DIR})
+    remote_dir=${wsConfig_remote_dir}/./${local_realpath}
     ssh_execute_cmd ${remote_dir} ${cmd}
 }
 
@@ -630,14 +588,31 @@ function run
         run_init
         exit 0
         ;;
-    "" | "config" )
-        shift
-        run_configue $@
-        exit 0
-        ;;
     "" | "start" )
         shift
         run_start $@
+        exit 0
+        ;;
+    "" | "download" )
+        shift
+        run_force_download $@
+        exit 0
+        ;;
+
+     "" | "download_to" )
+        shift
+        run_force_download_to $@
+        exit 0
+        ;;
+     "" | "upload" )
+        shift
+        run_force_upload $@
+        exit 0
+        ;;
+
+     "" | "upload_to" )
+        shift
+        run_force_upload_to $@
         exit 0
         ;;
     "" | "run")
