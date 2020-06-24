@@ -58,13 +58,13 @@ function parse_yaml_config {
    sed -ne "s|^\($s\):|\1|" \
         -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
         -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
-   awk -F$fs '{
+   awk -F${fs} '{
       indent = length($1)/2;
       vname[indent] = $2;
       for (i in vname) {if (i > indent) {delete vname[i]}}
       if (length($3) > 0) {
          vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
-         printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+         printf("%s%s%s=\"%s\"\n", "'${prefix}'",vn, $2, $3);
       }
    }'
 }
@@ -357,13 +357,14 @@ function run_config(){
     return
 }
 
-function run_remote_local_sync(){
+function run_pull(){
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
         run_init
     fi
     eval $(parse_yaml_config ${ws_cfg_file})
+    validate_ws_config
 
     echo "run_action_remote_local_sync"
 
@@ -379,13 +380,14 @@ function run_remote_local_sync(){
     return
 }
 
-function run_local_remote_sync(){
+function run_push(){
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         logerr "error on get configure"
         run_init
     fi
     eval $(parse_yaml_config ${ws_cfg_file})
+    validate_ws_config
 
     local_realpath=$(realpath --relative-to=${wsConfig_local_dir} ${CUR_WORK_DIR})
 
@@ -394,7 +396,7 @@ function run_local_remote_sync(){
     src=${wsConfig_local_dir}/./${local_realpath}
     des=${connection_ssh_acc}:"${wsConfig_remote_dir}/./"
     logmsg "sync up all data in local $src  to remote $des"
-    rsync_execute ${src} ${des}
+    rsync_execute ${src} ${des} true
     return
 }
 
@@ -593,12 +595,21 @@ function run
         run_start $@
         exit 0
         ;;
+    "" | "push" )
+        shift
+        run_push
+        exit 0
+        ;;
+    "" | "pull" )
+        shift
+        run_pull
+        exit 0
+        ;;
     "" | "download" )
         shift
         run_force_download $@
         exit 0
         ;;
-
      "" | "download_to" )
         shift
         run_force_download_to $@
