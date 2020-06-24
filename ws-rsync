@@ -13,6 +13,10 @@ PORT=
 MY_NAME=${ProgName}
 timeout=5
 
+if [[ -z ${EDITOR} ]];then
+    EDITOR=vi
+fi
+
 logdebug() {
 	# Only log to stdout when verbose is turned on
 	if [[ "${VERBOSE}" = "debug" ]]; then
@@ -36,15 +40,16 @@ function usage
     echo "basically, workspace-rsync will create .config_<name-of-workspace-dir> in your $HOME when you run the utility with out any confile
           then the tool will check whether or not the configure in $HOME then it will auto apply the configure"
 
-    echo "usage: ws-rsync init"
-    echo "usage: ws-rsync download "
-    echo "usage: ws-rsync download_to"
-    echo "usage: ws-rsync upload"
-    echo "usage: ws-rsync upload_to"
-    echo "usage: ws-rsync call <command>"
+    echo "usage: ws-rsync init : initial ws-rsync"
+    echo "usage: ws-rsync pull : pull down all data in remote to remote at current dir"
+    echo "usage: ws-rsync push : push up all data in  local to remote at current dir"
+    echo "usage: ws-rsync download <remote:file/dir>: sync file/dir from local to the dir in remote"
+    echo "usage: ws-rsync download_to <remote:file/dir-src> <local:dest> Donwload file/dir to local des"
+    echo "usage: ws-rsync upload <local:file/dir> replace file/dir at local to the same in remote"
+    echo "usage: ws-rsync upload_to <local:abs/relative-file/dir> <remote:abs-dest> upload a file from local to remote"
+    echo "usage: ws-rsync call <remote:command>"
     echo "usage: ws-rsync start"
-    echo "   ";
-    echo "  -h | --help             : Help";
+    echo "-h | --help             : Help";
 }
 
 function parse_yaml_config {
@@ -334,6 +339,24 @@ function run_init(){
     return
 }
 
+function run_config(){
+    logmsg "run_init"
+    ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
+    if [[ -z "$ws_cfg_file" ]];then
+        logerr: "Could not find ws-rsync configure file at $CUR_WORK_DIR"
+        logmsg: "Please using ws-rsync init to initial"
+    else
+        logerr "already have ws-config at $ws_cfg_file"
+        config_dir_path=$(dirname ${ws_cfg_file})
+        if [[ $config_dir_path != ${CUR_WORK_DIR} ]];then
+            logmsg "Look like the ws-rsync config not the same dir"
+            read -n1 -r -p "Press space to continue edit ws-rsync config in $config_dir_path ...Or Ctrl-C to abort" key
+        fi
+    fi
+    ${EDITOR} ${ws_cfg_file}
+    return
+}
+
 function run_remote_local_sync(){
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
@@ -558,6 +581,13 @@ function run
         run_init
         exit 0
         ;;
+
+    "" | "config" )
+        shift
+        run_config
+        exit 0
+        ;;
+
     "" | "start" )
         shift
         run_start $@
