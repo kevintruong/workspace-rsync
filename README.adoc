@@ -97,8 +97,8 @@ ws-rsync run force_download <workspace_file_path>
 
 [source,shell]
 ----
-ws-rsync run force_download /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
-ws-rsync run force_download ./version.h
+ws-rsync download /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
+ws-rsync download ./version.h
 ----
 
 ==== Upload to remote workspace
@@ -107,15 +107,15 @@ Upload `workspace_file_path` to remote, support relative/absolute path
 
 [source]
 ----
-ws-rsync run force_upload <workspace_file_path>
+ws-rsync upload <workspace_file_path>
 ----
 
 * Example:
 
 [source,shell]
 ----
-ws-rsync run force_upload /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
-ws-rsync run force_upload ./version.h
+ws-rsync upload /home/kevin/Project/KEVIN/Workspace/KenCanCode/version.h
+ws-rsync upload ./version.h
 ----
 
 ==== Force replace local by remote
@@ -124,14 +124,14 @@ Discard every changes on local and apply remote version for local workspace
 
 [source]
 ----
-ws-rsync run remote_local_sync
+ws-rsync local_sync
 ----
 
 ==== Force relplace remote by local
 
 [source]
 ----
-ws-rsync run local_remote_sync
+ws-rsync remote_sync
 ----
 
 Discard every changes on remote and apply local version for remote workspace
