@@ -9,7 +9,6 @@
     --diff_time 3
 
 ./ws-rsync start
-#./ws-rsync.sh run start
 
 
 

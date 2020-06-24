@@ -520,7 +520,7 @@ function ssh_execute_cmd(){
     SSH_CMD=
     # if connection_ssh_pass is used, then use ssh pass as authenticate method
     if [[ ! -z "${connection_ssh_acc}" ]]; then
-        SSH_CMD="ssh"
+        SSH_CMD="ssh -tt"
         if [[ ! -z ${connection_ssh_pass} ]];then
             SSH_CMD="sshpass -p$connection_ssh_pass $SSH_CMD"
         else #otherwise, use ssh private key or non authenticate
@@ -537,11 +537,13 @@ function ssh_execute_cmd(){
     else
         echo "not existed connection_ssh_acc, assume run in local"
     fi
-    echo "${SSH_CMD} \"cd ${target_dir} ; $cmd\"" |bash
+    temp_script_filename="/tmp/temp_cmd_$(echo \'${target_dir}_${cmd}\' | md5sum| awk '{print $1}').sh"
+
+    echo "${SSH_CMD} \"cd ${target_dir} ; $cmd\"" > ${temp_script_filename}
+    echo ${temp_script_filename}
 }
 
-function run_remote(){
-    echo "run remote $@"
+function run_remote_call(){
     cmd="$@"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
@@ -550,7 +552,7 @@ function run_remote(){
         exit -1
     fi
     eval $(parse_yaml_config ${ws_cfg_file})
-    validate_ws_config
+    validate_ws_config >/dev/null 2>&1
     local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${CUR_WORK_DIR})
     remote_dir=${wsConfig_remote_dir}/./${local_realpath}
     ssh_execute_cmd ${remote_dir} ${cmd}
@@ -633,15 +635,18 @@ function run
         echo "run action: ${subcommand}_${action} $@"
         ${subcommand}_${action} $@
         if [[ $? = 127 ]]; then
-                echo "Error: '$subcommand' is not a known subcommand." >&2
-                echo "     Run '$ProgName --help' for a list of known subcommands." >&2
+                logerr "Error: '$subcommand' is not a known subcommand." >&2
+                logerr "     Run '$ProgName --help' for a list of known subcommands." >&2
                 exit 1
             fi
         ;;
     "" | "call")
         shift
-        echo "run command $@ remote"
-        run_remote $@
+        logmsg "run command $@ remote"
+        bash_cmd=$(run_remote_call $@)
+        bash ${bash_cmd}
+        logmsg "clean up command script"
+        rm -rf ${bash_cmd}
     ;;
     *)
         echo "Error: '$subcommand' is not a known subcommand." >&2
