@@ -1,0 +1,9 @@
+---
+connection:
+  ssh_acc: kevin@kencancode
+  ssh_key: /home/kevin/.ssh/id_rsa
+  ssh_pass: password
+wsConfig:
+  local_dir: /tmp/tempdir
+  remote_dir: /home/kevin/Project/ugw
+hookCmd: echo

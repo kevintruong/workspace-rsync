@@ -137,9 +137,10 @@ function rsync_execute(){
     src=$1
     des=$2
     force_sync=$3
+    no_relative=$4
 
     SSH_OPTS="ssh -T -o Compression=no -x"
-    RSYNC_CMD="rsync -aHAXxR --numeric-ids --progress --exclude=.git/ --exclude=*~"
+    RSYNC_CMD="rsync -aHAXx --numeric-ids --progress --exclude=.git/ --exclude=*~"
 
     if [[ -f ${wsConfig_local_dir}/.gitignore ]]; then
         if [[ -z "$force_sync" || ${force_sync} == false ]]; then
@@ -148,6 +149,10 @@ function rsync_execute(){
     fi
     if [[ ! -z ${connection_sudo} ]];then
         RSYNC_CMD="$RSYNC_CMD --rsync-path=\"sudo rsync\""
+    fi
+
+    if [[ -z ${no_relative} ]];then
+        RSYNC_CMD="$RSYNC_CMD --relative"
     fi
 
     # SSH OPTIONS
@@ -213,7 +218,7 @@ get_ws_config_file() {
     config_file="${ABS_DIR_PATH}/.ws-rsync.yml"
 
     if [[ ${ABS_DIR_PATH} = "/" ]]; then
-        logerr "Not found configure file recursively, exit -1"
+        logerr "Not found configure file recursively"
         exit -1
     fi
     if [[ -f ${config_file} ]]; then
@@ -404,10 +409,11 @@ function run_force_upload_to(){
     abs_upload_entry=$(realpath -m ${upload_entry})
     local_realpath=$(realpath --relative-to=${wsConfig_local_dir} -m ${abs_upload_entry})
 
-    src=${wsConfig_local_dir}/./${local_realpath}
+#    src=${wsConfig_local_dir}/./${local_realpath}
+    src=${abs_upload_entry}
     des=${connection_ssh_acc}:${remote_des}
 
-    rsync_execute ${src} ${des} true
+    rsync_execute ${src} ${des} true true
 }
 
 function run_force_download(){
@@ -445,7 +451,7 @@ function run_force_download_to(){
     src=${connection_ssh_acc}:"${wsConfig_remote_dir}/./${local_realpath}"
     des="${download_to}/./"
 
-    rsync_execute ${src} ${des} true
+    rsync_execute ${src} ${des} true true
 }
 
 function run_start(){
