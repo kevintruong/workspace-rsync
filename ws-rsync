@@ -42,6 +42,7 @@ function usage
 
     echo "usage: ws-rsync init : initial ws-rsync"
     echo "usage: ws-rsync pull : pull down all data in remote to remote at current dir"
+    echo "usage: ws-rsync pull -r/--remap: pull down directory"
     echo "usage: ws-rsync push : push up all data in  local to remote at current dir"
     echo "usage: ws-rsync download <remote:file/dir>: sync file/dir from local to the dir in remote"
     echo "usage: ws-rsync download_to <remote:file/dir-src> <local:dest> Donwload file/dir to local des"
@@ -116,7 +117,6 @@ function watch_dir_inotify(){
                 --exclude='*~' \
                 --exclude='.*.swp' \
                 ${watch_dir} | {
-
         previous_SECONDS=0
         previous_event=
         while read event dir file ;
@@ -143,8 +143,9 @@ function rsync_execute(){
     des=$2
     force_sync=$3
     no_relative=$4
+    dir_mapping=$5
 
-    SSH_OPTS="ssh -T -o Compression=no -x"
+    SSH_OPTS="ssh -T -o Compression=no -x -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     RSYNC_CMD="rsync -aHAXx --numeric-ids --progress --exclude=.git/ --exclude=*~"
 
     if [[ -f ${wsConfig_local_dir}/.gitignore ]]; then
@@ -152,12 +153,17 @@ function rsync_execute(){
             RSYNC_CMD="$RSYNC_CMD --exclude-from='${wsConfig_local_dir}/.gitignore'"
         fi
     fi
+
     if [[ ! -z ${connection_sudo} ]];then
         RSYNC_CMD="$RSYNC_CMD --rsync-path=\"sudo rsync\""
     fi
 
     if [[ -z ${no_relative} ]];then
         RSYNC_CMD="$RSYNC_CMD --relative"
+    fi
+
+    if [[ ! -z ${dir_mapping} ]];then
+        RSYNC_CMD="$RSYNC_CMD --include=*/ --exclude=*"
     fi
 
     # SSH OPTIONS
@@ -249,10 +255,17 @@ function validate_ssh_connection(){
     temp=""
     if [[ ! -z ${connection_ssh_pass} ]];then
         logmsg "validating ssh connection for ${connection_ssh_acc}"
-        sshpass -p${connection_ssh_pass} ssh -o ConnectTimeout=${timeout} -p ${connection_ssh_port} ${connection_ssh_acc} exit
+        sshpass -p${connection_ssh_pass} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=${timeout} -p ${connection_ssh_port} ${connection_ssh_acc} exit
         if [[ $? == 255 || $? == 124 ]];then
             logerr "ssh connection is not active or timeout"
-            read -r "Press any key to continue or Ctrl-C to exit:" temp
+#            read -n1 -r -p "Press space to continue ... Or Ctrl-C to abort" key
+            #TODO check if hookCmd existed, then trying to using hooCmd to provisioning the change
+            # or auto bring up remote
+            if [[ ! -z ${hookCmd} ]];then
+                logmsg "Trying to use hookCmd to recover the remote"
+                ${hookCmd} action auto_recover
+                return
+            fi
         else
             logmsg "ssh connection is active"
             return
@@ -261,7 +274,11 @@ function validate_ssh_connection(){
 
     if [[ ! -z ${connection_ssh_key} ]];then
         logmsg "validating ssh connection for ${connection_ssh_acc}"
-        ssh -o ConnectTimeout=${timeout} -p ${connection_ssh_port} -q -i ${connection_ssh_key} ${connection_ssh_acc} exit
+        ssh -o ConnectTimeout=${timeout} \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -p ${connection_ssh_port} \
+            -q -i ${connection_ssh_key} ${connection_ssh_acc} exit
         if [[ $? == 255 ]];then
             logerr "ssh connection is not active or timeout"
             exit -1
@@ -298,26 +315,7 @@ function validate_bool_input(){
     fi
 }
 
-function input_ssh_authenticate(){
-    read -p 'Using private key to authenticate,default Yes (yes/no)': auth_private_key
-    if [[ -z "${auth_private_key}" ]]; then
-        auth_private_key="yes"
-    fi
-    auth_private_key=$(validate_bool_input ${auth_private_key})
-    if [[ ${auth_private_key} == -1 ]]; then
-        echo "Error on options using private key or not"
-        auth_private_key=1
-    fi
-    if [[ ${auth_private_key} == 1 ]]; then
-         read -p 'Enter your ssh private key:' connection_ssh_key
-    else
-        read -sp 'Enter your ssh password: \n' connection_ssh_pass
-    fi
-    read -p 'Enter your ssh port (Enter for default: 22) :' connection_ssh_port
-    if [[ -z ${connection_ssh_port} || $((connection_ssh_port)) != ${connection_ssh_port} ]];then
-        connection_ssh_port=22
-    fi
-}
+
 get_ws_config_file_path() {
     ABS_DIR_PATH=${CUR_WORK_DIR}
     MD5_CUR_DIR=$(echo -n ${ABS_DIR_PATH} | md5sum | awk '{print $1}')
@@ -329,24 +327,26 @@ function run_init(){
     logmsg "run_init"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
-        logerr: "error on get configure file"
+        logerr  "not existed ws-rsync configure file"
+        cp /var/lib/ws-rsync/temp.yml ${CUR_WORK_DIR}/${DEFAULT_CONFIG_FILE_NAME}
     else
         logerr "already have ws-config at $ws_cfg_file"
         read -n1 -r -p "Press space to continue init ws-rsync in $CUR_WORK_DIR ...Or Ctrl-C to abort" key
     fi
-    cp /var/lib/ws-rsync/temp.yml ${CUR_WORK_DIR}/${DEFAULT_CONFIG_FILE_NAME}
     vi ${CUR_WORK_DIR}/${DEFAULT_CONFIG_FILE_NAME}
+    eval $(parse_yaml_config ${ws_cfg_file})
+    ws-rsync call mkdir -p ${wsConfig_remote_dir}
     return
 }
 
 function run_config(){
-    logmsg "run_init"
+    logmsg "configure"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         logerr: "Could not find ws-rsync configure file at $CUR_WORK_DIR"
         logmsg: "Please using ws-rsync init to initial"
     else
-        logerr "already have ws-config at $ws_cfg_file"
+        logmsg "Found ws-config at $ws_cfg_file"
         config_dir_path=$(dirname ${ws_cfg_file})
         if [[ $config_dir_path != ${CUR_WORK_DIR} ]];then
             logmsg "Look like the ws-rsync config not the same dir"
@@ -358,6 +358,20 @@ function run_config(){
 }
 
 function run_pull(){
+    # positional args
+    args=()
+    # named args
+    while [[ "$1" != "" ]]; do
+        case "$1" in
+           -r | --remap )                    dirmapping=true;  shift;;
+           -h | --help )                     usage;          exit;; # quit and show usage
+            * )                              args+=("$1")             # if no match, add it to the positional args
+        esac
+        shift # move to next kv pair
+    done
+    # restore positional args
+    set -- "${args[@]}"
+
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
         echo "error on get configure"
@@ -376,7 +390,7 @@ function run_pull(){
     src=${connection_ssh_acc}:"$remote_parent_dir/${wsConfig_remote_dirname}/./$local_realpath"
     des=${wsConfig_local_dir}
     echo "sync up all data in remote $src  to local $des"
-    rsync_execute ${src} ${des}
+    rsync_execute ${src} ${des} 0 0 ${dirmapping}
     return
 }
 
@@ -520,7 +534,7 @@ function ssh_execute_cmd(){
     SSH_CMD=
     # if connection_ssh_pass is used, then use ssh pass as authenticate method
     if [[ ! -z "${connection_ssh_acc}" ]]; then
-        SSH_CMD="ssh -tt"
+        SSH_CMD="ssh -tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         if [[ ! -z ${connection_ssh_pass} ]];then
             SSH_CMD="sshpass -p$connection_ssh_pass $SSH_CMD"
         else #otherwise, use ssh private key or non authenticate
@@ -539,7 +553,8 @@ function ssh_execute_cmd(){
     fi
     temp_script_filename="/tmp/temp_cmd_$(echo \'${target_dir}_${cmd}\' | md5sum| awk '{print $1}').sh"
 
-    echo "${SSH_CMD} \"cd ${target_dir} ; $cmd\"" > ${temp_script_filename}
+    echo "${SSH_CMD} \"mkdir -p ${target_dir}\"" > ${temp_script_filename}
+    echo "${SSH_CMD} \"cd ${target_dir} ; $cmd\"" >> ${temp_script_filename}
     echo ${temp_script_filename}
 }
 
@@ -547,8 +562,8 @@ function run_remote_call(){
     cmd="$@"
     ws_cfg_file=$(get_ws_config_file ${CUR_WORK_DIR})
     if [[ -z "$ws_cfg_file" ]];then
-        echo "error on get configure"
-        echo "please rerun ws-rsync init"
+        logerr "error on get configure"
+        logerr "please rerun ws-rsync init"
         exit -1
     fi
     eval $(parse_yaml_config ${ws_cfg_file})
@@ -604,9 +619,16 @@ function run
         ;;
     "" | "pull" )
         shift
-        run_pull
+        run_pull $@
         exit 0
         ;;
+
+    "" | "dir_mapping" )
+        shift
+        run_pull 1
+        exit 0
+        ;;
+
     "" | "download" )
         shift
         run_force_download $@
