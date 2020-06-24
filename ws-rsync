@@ -7,9 +7,6 @@ ProgName=$(basename $0)
 DEFAULT_DIFF_TIME=3
 DEFAULT_CONFIG_FILE_NAME=".ws-rsync.yml"
 
-mkdir -p $HOME/.ws-rsync/
-
-
 # Default command line arguments
 VERBOSE="verbose"
 PORT=
@@ -39,21 +36,14 @@ function usage
     echo "basically, workspace-rsync will create .config_<name-of-workspace-dir> in your $HOME when you run the utility with out any confile
           then the tool will check whether or not the configure in $HOME then it will auto apply the configure"
 
-    echo "usage: ws-rsync config --ssh kevin@kencancode.xyz \\
-                                 --ssh-key $HOME/.ssh/sample_key \\
-                                 --local $(pwd) \\
-                                 --remote /mnt/my-project/ \\
-                                 --connection_sudo true\\
-                                 --ssh-port 16022"
-
+    echo "usage: ws-rsync init"
+    echo "usage: ws-rsync download "
+    echo "usage: ws-rsync download_to"
+    echo "usage: ws-rsync upload"
+    echo "usage: ws-rsync upload_to"
+    echo "usage: ws-rsync call <command>"
+    echo "usage: ws-rsync start"
     echo "   ";
-    echo "  --ssh-acc               : Your ssh account kevin@kencancode ";
-    echo "  --ssh-pass              : use ssh account password for authenticate; required sshpass";
-    echo "  --ssh-key               : your ssh private key absolute path <~/home/kevin/.ssh/id_rsa>";
-    echo "  --ssh-port              : custom ssh port,options";
-    echo "  --remote                : remote work space dir /mnt/KEVIN/TestABC";
-    echo "  --connection_diff_time             : connection_diff_time to check changed on local side";
-    echo "  --connection_sudo                  : connection_sudo permission --connection_sudo true/false";
     echo "  -h | --help             : Help";
 }
 
@@ -80,32 +70,6 @@ function dump_config()
     if [[ -f ${ws_cfg_file} ]];then
         cat ${ws_cfg_file}
     fi
-}
-
-
-function parse_conf_args
-{
-  # positional args
-  args=()
-
-  # named args
-  while [[ "$1" != "" ]]; do
-      case "$1" in
-          --ssh-acc )                           connection_ssh_acc="$2";   shift;;
-          --ssh-port )                          connection_ssh_port="$2"; shift;;
-          --ssh-pass )                          connection_ssh_pass="$2";   shift;;
-          --ssh-key )                           connection_ssh_key="$2";   shift;;
-          --local )                             wsConfig_local_dir="$2";   shift;;
-          --remote )                            wsConfig_remote_dir="$2";   shift;;
-          --diff_time )                         connection_diff_time="$2"; shift;;
-          --sudo )                              connection_sudo="$2"; shift;;
-          -h | --help )                         usage;          exit;; # quit and show usage
-          dump )                                dump_config; exit;;
-          * )                           args+=("$1")             # if no match, add it to the positional args
-      esac
-      shift # move to next kv pair
-  done
-  set -- "${args[@]}"
 }
 
 function is_tracked_by_git(){
