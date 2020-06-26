@@ -666,9 +666,15 @@ function run
         shift
         logmsg "run command $@ remote"
         bash_cmd=$(run_remote_call $@)
-        bash ${bash_cmd}
-        logmsg "clean up command script"
-        rm -rf ${bash_cmd}
+        if [[ ! -z "$bash_cmd" ]]; then
+            bash ${bash_cmd}
+            logmsg "clean up command script"
+            rm -rf ${bash_cmd}
+        else
+            logerr "Error on create bash cript to run $@"
+            exit 1
+        fi
+        exit 0;
     ;;
     *)
         echo "Error: '$subcommand' is not a known subcommand." >&2

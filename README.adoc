@@ -54,8 +54,7 @@ But there will have window time `diff_time` to the next check If you want the pr
 #dependency to run ssh with password authentication
 sudo apt install sshpass inotify-tools
 
-sudo cp ws-rsync /usr/local/bin
-export PATH=$PATH:/usr/local/bin
+sudo make install
 ----
 
 === Configure and run the utility
@@ -63,24 +62,8 @@ export PATH=$PATH:/usr/local/bin
 [source,shell]
 ----
 # for use ssh key to authentication
-ws-rsync config \
-    --ssh-acc vu.truong@kencancode.xyz \
-    --ssh-port 16022 \
-    --ssh-key $HOME/.ssh/id_rsa \
-    --local $(pwd) \
-    --remote /tmp/ \
-    --sudo true \
-    --diff_time 3
-
-# for use ssh password to authentication
-//ws-rsync config \
-//    --ssh-acc vu.truong@kencancode.xyz \
-//    --ssh-port 16022 \
-//    --ssh-pass kencancode \
-//    --local $(pwd) \
-//    --remote /tmp/ \
-//    --diff_time 3
-
+ws-rsync init
+ws-rsync config
 ws-rsync start
 ----
 
@@ -90,7 +73,7 @@ ws-rsync start
 
 [source]
 ----
-ws-rsync run force_download <workspace_file_path>
+ws-rsync download <workspace_file_path>
 ----
 
 * Example:
@@ -124,14 +107,14 @@ Discard every changes on local and apply remote version for local workspace
 
 [source]
 ----
-ws-rsync local_sync
+ws-rsync pull
 ----
 
 ==== Force relplace remote by local
 
 [source]
 ----
-ws-rsync remote_sync
+ws-rsync push
 ----
 
 Discard every changes on remote and apply local version for remote workspace
