@@ -17,6 +17,10 @@ if [[ -z ${EDITOR} ]];then
     EDITOR=vi
 fi
 
+# Using status file /tmp/ws-rsync.status
+# state: <INACTIVE>/<ACTIVE>
+# lasttime:
+
 logdebug() {
 	# Only log to stdout when verbose is turned on
 	if [[ "${VERBOSE}" = "debug" ]]; then
