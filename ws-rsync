@@ -149,8 +149,8 @@ function rsync_execute(){
     no_relative=$4
     dir_mapping=$5
 
-    SSH_OPTS="ssh -T -o Compression=no -x -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-    RSYNC_CMD="rsync -aHAXx --numeric-ids --progress --exclude=.git/ --exclude=*~"
+    SSH_OPTS="ssh -T -o Compression=yes -x -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    RSYNC_CMD="rsync -aHAXxz --numeric-ids --progress --exclude=.git/ --exclude=*~"
 
     if [[ -f ${wsConfig_local_dir}/.gitignore ]]; then
         if [[ -z "$force_sync" || ${force_sync} == false ]]; then
