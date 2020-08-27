@@ -15,6 +15,8 @@ draft: true
 //tag::readme[]
 == What is Workspace Rsync ?
 
+image::https://i.imgur.com/46uSknN.gif[https://i.imgur.com/46uSknN.gif]
+
 Simple and lightweight bash script can help to quick sync a change from local workspace to remote workspace.
 , support to upload resource to and download resource from remote workspace.
 Another useful of the tool is support to quickly run command on remote workspace.
@@ -28,7 +30,7 @@ Features:
 ** Inotify/monitoring changing happend in your local working dir and update to remote working dir
 * Support to sync up the whole working dir from remote to local and otherwise
 * Support configure file for auto-reload the previous configure
-* Saving the configure file to $HOME/.ws-rsync/config_<name_of_monitoring_workspace>, Auto apply the configuration from there when user run the utility on configured workspace
+* Saving the configure file to <Local Workspace>/.ws-rsync, Auto apply the configuration from there when user run the utility on configured workspace
 * If the local has not the workspace matching with remote side, then ask user to allow for downloading the remote side.
 And otherwise.
 if remote has not the Workspace which existed on local, the ask user to allow for uploading the local version to remote.
