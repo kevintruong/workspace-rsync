@@ -1,17 +1,3 @@
----
-title: "Workspace Rsync"
-dte: 2020-04-18T04:39:36Z
-draft: true
----
-
-:projectdir: ../../
-:imagesdir: ${projectdir}/assets/
-:toclevels: 4
-:toc:
-:sectnums:
-:source-highlighter: coderay
-:sectnumlevels: 5
-
 //tag::readme[]
 == What is Workspace Rsync ?
 
